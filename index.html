@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>輔大攤位遊戲報名系統</title>
+<meta name="description" content="輔仁大學攤位遊戲線上報名平台">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎪</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#/">
+      <span class="brand-mark">🎪</span>
+      <span class="brand-text">
+        <strong>輔大攤位遊戲</strong>
+        <small>線上報名系統</small>
+      </span>
+    </a>
+    <nav class="nav" id="nav">
+      <a href="#/" data-route="home">攤位</a>
+      <a href="#/mine" data-route="mine">我的報名</a>
+      <a href="#/vendor" data-route="vendor">攤商</a>
+      <a href="#/admin" data-route="admin">總召</a>
+    </nav>
+    <button class="icon-btn" id="themeBtn" type="button" title="切換深色/淺色" aria-label="切換主題">◐</button>
+  </div>
+</header>
+
+<main id="app" class="app"></main>
+
+<footer class="footer">
+  <span>輔仁大學攤位遊戲報名系統</span>
+  <span class="dot">·</span>
+  <span id="serverStatus">連線中…</span>
+</footer>
+
+<div id="toastHost" class="toast-host" aria-live="polite"></div>
+<div id="modalHost" class="modal-host" hidden></div>
+<div id="lightbox" class="lightbox" hidden><img alt="展示照片" id="lightboxImg"><button class="lightbox-close" type="button">✕</button></div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/player.js"></script>
+<script src="js/vendor.js"></script>
+<script src="js/admin.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
