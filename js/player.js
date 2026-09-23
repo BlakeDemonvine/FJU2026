@@ -9,14 +9,10 @@ window.PlayerView = (function () {
   /* ================= 首頁：所有攤位 ================= */
 
   function renderHome(app) {
-    var cfg = window.APP_CONFIG;
     app.innerHTML =
-      '<div class="page-head">' +
-        '<h1>' + esc(cfg.EVENT_TITLE) + '　報名中的攤位</h1>' +
-        '<p class="sub">' + esc(cfg.EVENT_SUBTITLE) + '</p>' +
-      '</div>' +
-      '<div class="field" style="max-width:340px">' +
-        '<input type="text" id="boothSearch" placeholder="🔍 搜尋攤位名稱或關鍵字">' +
+      '<div class="searchbar">' +
+        '<span class="ico">🔍</span>' +
+        '<input type="text" id="boothSearch" placeholder="搜尋攤位名稱或關鍵字" aria-label="搜尋攤位">' +
       '</div>' +
       '<div id="boothList">' + UI.loadingHTML('正在載入攤位…') + '</div>';
 
@@ -63,6 +59,8 @@ window.PlayerView = (function () {
         ? '<span class="tag tag-danger">已截止報名</span>'
         : '<span class="tag tag-ok">尚餘 ' + b.totalRemaining + ' 個名額</span>';
 
+      var dur = UI.formatDuration(b.duration);
+
       return '<a class="booth-card' + (b.allClosed ? ' is-closed' : '') + '" href="#/booth/' + esc(b.boothId) + '">' +
         '<div class="booth-thumb">' + thumb + badge + '</div>' +
         '<div class="booth-body">' +
@@ -70,6 +68,7 @@ window.PlayerView = (function () {
           '<p class="booth-desc">' + esc(b.description || '這個攤位還沒有填寫簡介') + '</p>' +
           '<div class="booth-foot">' + status +
             '<span class="tag tag-muted">' + b.slotCount + ' 個時段</span>' +
+            (dur ? '<span class="tag tag-amber">⏱ ' + esc(dur) + '</span>' : '') +
           '</div>' +
         '</div>' +
       '</a>';
@@ -112,10 +111,13 @@ window.PlayerView = (function () {
       var closedNotice = b.allClosed
         ? '<div class="notice notice-warn">這個攤位目前所有時段都已經停止報名了。</div>' : '';
 
+      var dur = UI.formatDuration(b.duration);
+
       app.innerHTML =
         '<div class="page-head">' +
           '<a class="back" href="#/">← 回到攤位列表</a>' +
           '<h1>' + esc(b.name) + '</h1>' +
+          (dur ? '<p class="sub">⏱ 預計遊玩時數 ' + esc(dur) + '</p>' : '') +
         '</div>' +
         UI.slideshowHTML(b.photos) +
         (b.description
@@ -230,11 +232,6 @@ window.PlayerView = (function () {
     var me = UI.store('me') || {};
 
     app.innerHTML =
-      '<div class="page-head">' +
-        '<a class="back" href="#/">← 回到攤位列表</a>' +
-        '<h1>我的報名</h1>' +
-        '<p class="sub">輸入報名時填的姓名與手機號碼，就能查看並取消報名。</p>' +
-      '</div>' +
       '<div class="card">' +
         '<div class="row">' +
           '<div class="field" style="margin-bottom:0"><label for="myName">姓名</label>' +
