@@ -77,8 +77,7 @@ window.AdminView = (function () {
   function paint(app) {
     var d = state.data;
     app.innerHTML =
-      '<div class="page-head"><h1>總召後台</h1>' +
-        '<p class="sub">管理攤商代碼、查看所有攤位與報名狀況。</p></div>' +
+      '<div class="page-head"><h1>總召後台</h1></div>' +
 
       '<div class="stat-grid mb">' +
         '<div class="stat"><b>' + d.stats.boothCount + '</b><span>攤位代碼</span></div>' +
@@ -118,9 +117,8 @@ window.AdminView = (function () {
     body.innerHTML =
       '<div class="card">' +
         '<div class="card-title"><h2>新增攤商代碼</h2></div>' +
-        '<p class="muted small">攤商來報名攤位時，在這裡產生一組代碼交給他，他就能自己進系統填攤位資料。</p>' +
         '<div class="row">' +
-          '<input type="text" id="newNote" maxlength="60" placeholder="備註，例如：資工系學會 / 聯絡人小美">' +
+          '<input type="text" id="newNote" maxlength="60" placeholder="備註">' +
           '<button class="btn" id="newBooth" style="flex:0 0 auto">產生代碼</button>' +
         '</div>' +
       '</div>' +
@@ -270,14 +268,53 @@ window.AdminView = (function () {
   function paintSignups(app) {
     var d = state.data;
     var body = document.getElementById('aBody');
+    var live = d.booths.filter(function (b) { return b.configured; });
 
     body.innerHTML =
-      '<div class="card">' +
-        '<div class="card-title"><h2>全部報名資料（' + d.signups.length + '）</h2>' +
-          '<button class="btn btn-ghost btn-sm" id="expAll">⬇ 匯出 CSV</button></div>' +
-        '<div class="field"><input type="text" id="sSearch" placeholder="🔍 搜尋攤位、姓名或電話" value="' + esc(state.keyword) + '"></div>' +
-        '<div id="sTable"></div>' +
-      '</div>';
+      '<div class="btn-row mb">' +
+        '<button class="btn btn-ghost btn-sm" id="expAll">⬇ 匯出 CSV</button>' +
+        '<button class="btn btn-ghost btn-sm" id="toggleTable">切換表格檢視</button>' +
+      '</div>' +
+      '<div id="charts"></div>' +
+      '<div id="rawTable" hidden></div>';
+
+    var charts = document.getElementById('charts');
+
+    /* 總覽：各攤位報名人數 */
+    Charts.bar(charts, {
+      title: '各攤位報名人數',
+      sub: '橫軸為攤位，縱軸為人數。深色是已報名人數，淺色是該攤位的總名額。',
+      data: live.map(function (b) {
+        return {
+          label: b.name, value: b.taken, capacity: b.capacity,
+          note: b.closed ? '（已停止報名）' : ''
+        };
+      })
+    });
+
+    /* 各攤位：每個時段的報名人數 */
+    live.forEach(function (b) {
+      if (!b.slots.length) return;
+      Charts.bar(charts, {
+        title: b.name + '　各時段報名人數',
+        sub: '橫軸為時段，縱軸為人數。深色是已報名人數，淺色是該時段的名額上限。',
+        alt: true,
+        data: b.slots.map(function (s) {
+          return {
+            label: s.label, value: s.taken, capacity: s.capacity,
+            note: s.closed ? '（已停止）' : (s.remaining <= 0 ? '（額滿）' : '')
+          };
+        })
+      });
+    });
+
+    if (!live.length) {
+      charts.innerHTML = '<div class="card">' +
+        UI.emptyHTML('📊', '還沒有攤位資料', '等攤商填好攤位後這裡就會出現統計圖') + '</div>';
+    }
+
+    /* 表格檢視（無障礙備援 + 逐筆查詢） */
+    var tableBox = document.getElementById('rawTable');
 
     function rows() {
       var k = state.keyword.toLowerCase();
@@ -286,7 +323,15 @@ window.AdminView = (function () {
       });
     }
 
-    function draw() {
+    function drawTable() {
+      tableBox.innerHTML =
+        '<div class="card">' +
+          '<div class="card-title"><h2>全部報名資料（' + d.signups.length + '）</h2></div>' +
+          '<div class="searchbar"><span class="ico">🔍</span>' +
+            '<input type="text" id="sSearch" placeholder="搜尋攤位、姓名或電話" value="' + esc(state.keyword) + '"></div>' +
+          '<div id="sTable"></div>' +
+        '</div>';
+
       var list = rows();
       document.getElementById('sTable').innerHTML = list.length
         ? '<div class="table-wrap"><table><thead><tr>' +
@@ -300,20 +345,31 @@ window.AdminView = (function () {
               '<td class="num muted">' + esc(s.createdAt) + '</td></tr>';
           }).join('') + '</tbody></table></div>'
         : UI.emptyHTML('🔍', '沒有符合的報名資料', '');
+
+      var box = document.getElementById('sSearch');
+      box.addEventListener('input', function () {
+        state.keyword = this.value.trim();
+        var pos = this.selectionStart;
+        drawTable();
+        var again = document.getElementById('sSearch');
+        again.focus();
+        again.setSelectionRange(pos, pos);
+      });
     }
 
-    document.getElementById('sSearch').addEventListener('input', function () {
-      state.keyword = this.value.trim();
-      draw();
-    });
+    document.getElementById('toggleTable').onclick = function () {
+      var showTable = tableBox.hidden;
+      tableBox.hidden = !showTable;
+      charts.hidden = showTable;
+      this.textContent = showTable ? '切換圖表檢視' : '切換表格檢視';
+      if (showTable && !tableBox.innerHTML) drawTable();
+    };
 
     document.getElementById('expAll').onclick = function () {
       var out = [['攤位', '時段', '姓名', '電話', '報名時間']];
       rows().forEach(function (s) { out.push([s.boothName, s.slotLabel, s.name, s.phone, s.createdAt]); });
       UI.downloadCSV('全部報名資料.csv', out);
     };
-
-    draw();
   }
 
   return { render: render };
