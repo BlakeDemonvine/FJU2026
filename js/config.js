@@ -11,11 +11,11 @@ window.APP_CONFIG = {
    */
   GAS_URL: 'https://script.google.com/macros/s/AKfycbypPqYiJs4DlHnqSG81OAaH6ugloOHUVL9oNyaRzc3qQt0M8jEz-GJocvsu2v3r3xjr/exec',
 
-  /** 活動名稱（顯示在首頁） */
-  EVENT_TITLE: '輔大攤位遊戲',
+  /** 活動名稱（顯示在頁首與瀏覽器分頁） */
+  EVENT_TITLE: '2026原力萌芽 幸福親子園遊會',
 
-  /** 首頁的提示文字 */
-  EVENT_SUBTITLE: '選一個攤位，挑一個時段，填姓名跟電話就報名完成囉！',
+  /** 主視覺橫幅圖片路徑 */
+  BANNER: 'assets/fju2026.jpg',
 
   /** 上傳前把照片壓到這個寬度以內（像素），可降低 Drive 負擔與上傳時間 */
   PHOTO_MAX_WIDTH: 1600,
@@ -24,5 +24,8 @@ window.APP_CONFIG = {
   PHOTO_QUALITY: 0.82,
 
   /** 攤位列表自動重新整理間隔（毫秒），設 0 關閉 */
-  AUTO_REFRESH_MS: 60000
+  AUTO_REFRESH_MS: 60000,
+
+  /** 攤位詳情頁幻燈片自動換頁間隔（毫秒） */
+  SLIDESHOW_MS: 3500
 };
