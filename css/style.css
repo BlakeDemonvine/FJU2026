@@ -195,15 +195,20 @@ p { margin: 0 0 .8em; }
 .footer {
   border-top: 1px solid var(--border);
   background: var(--bg-elev);
-  padding: 22px 16px 26px; text-align: center;
-  color: var(--text-dim); font-size: .85rem; line-height: 2;
+  padding: 18px 14px 22px; text-align: center;
+  color: var(--text-dim); line-height: 1.9;
+}
+/* 字級跟著視窗縮放，讓主辦單位那行在手機上也能一行放完、不換行 */
+.footer-line {
+  font-size: clamp(9.5px, 2.75vw, 13px);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .footer strong { color: var(--text); font-weight: 700; }
-.footer .sep { color: var(--amber); margin: 0 8px; }
+.footer .sep { color: var(--amber); margin: 0 6px; }
 
 .page-head { margin-bottom: 18px; }
 .page-head .sub { color: var(--text-dim); font-size: .92rem; margin: 0; }
-.page-head .back { font-size: .70rem; display: inline-block; margin-bottom: 6px; color: var(--text-dim); }
+.page-head .back { font-size: .85rem; display: inline-block; margin-bottom: 6px; color: var(--text-dim); }
 
 /* ---------- 卡片 ---------- */
 .card {
