@@ -203,7 +203,7 @@ p { margin: 0 0 .8em; }
 
 .page-head { margin-bottom: 18px; }
 .page-head .sub { color: var(--text-dim); font-size: .92rem; margin: 0; }
-.page-head .back { font-size: .85rem; display: inline-block; margin-bottom: 6px; color: var(--text-dim); }
+.page-head .back { font-size: .70rem; display: inline-block; margin-bottom: 6px; color: var(--text-dim); }
 
 /* ---------- 卡片 ---------- */
 .card {
