@@ -9,7 +9,11 @@ window.App = (function () {
 
   function setRefresh(fn, ms) {
     clearRefresh();
-    refreshTimer = setInterval(fn, ms);
+    // 分頁被切到背景時不打後端，省 Apps Script 的執行配額
+    refreshTimer = setInterval(function () {
+      if (document.hidden) return;
+      fn();
+    }, ms);
   }
   function clearRefresh() {
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
