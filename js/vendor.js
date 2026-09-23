@@ -59,7 +59,15 @@ window.VendorView = (function () {
     state.code = code;
     state.booth = booth;
     state.photos = (booth.photos || []).slice();
-    state.slots = (booth.slots || []).slice();
+    state.slots = (booth.slots || []).map(function (s) {
+      var parts = (s.start && s.end) ? { start: s.start, end: s.end } : UI.splitLabel(s.label);
+      return {
+        id: s.id, label: s.label,
+        start: parts.start, end: parts.end,
+        capacity: Number(s.capacity) || 0,
+        closed: !!s.closed, taken: Number(s.taken) || 0
+      };
+    });
     state.tab = state.tab || 'info';
     paint(app);
   }
@@ -108,16 +116,22 @@ window.VendorView = (function () {
         '<div class="field"><label for="fName">攤位名稱 <span class="muted small">（必填）</span></label>' +
           '<input type="text" id="fName" maxlength="40" value="' + esc(b.name) + '" placeholder="例：射氣球大挑戰"></div>' +
         '<div class="field"><label for="fDesc">攤位簡介</label>' +
-          '<textarea id="fDesc" maxlength="2000" placeholder="介紹一下你們的遊戲玩法、獎品、注意事項…">' + esc(b.description) + '</textarea>' +
-          '<p class="hint">玩家會在攤位卡片與詳情頁看到這段文字，可以換行。</p></div>' +
+          '<textarea id="fDesc" maxlength="2000" placeholder="介紹一下你們的遊戲玩法、獎品、注意事項…">' + esc(b.description) + '</textarea></div>' +
+        '<div class="field" style="max-width:280px;margin-bottom:0">' +
+          '<label for="fDuration">預計遊玩時數</label>' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<input type="number" id="fDuration" min="0" max="600" step="5" value="' +
+              (Number(b.duration) || '') + '" placeholder="例：15">' +
+            '<span class="muted small" style="white-space:nowrap">分鐘</span>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
 
       '<div class="card">' +
         '<div class="card-title"><h2>展示照片</h2>' +
           '<span class="small muted" id="photoCount"></span></div>' +
         '<div class="photo-grid mb" id="photoGrid"></div>' +
-        '<div class="dropzone" id="dropzone">📷 點這裡選擇照片，或把圖片拖曳進來<br>' +
-          '<span class="small">可以一次選多張，玩家會以幻燈片方式看到</span></div>' +
+        '<div class="dropzone" id="dropzone">📷 上傳多張照片</div>' +
         '<input type="file" id="photoInput" accept="image/*" multiple hidden>' +
       '</div>' +
 
@@ -130,8 +144,8 @@ window.VendorView = (function () {
 
       '<div class="card">' +
         '<div class="card-title"><h2>報名開關</h2></div>' +
-        '<label class="switch"><input type="checkbox" id="fClosed"' + (b.closed ? ' checked' : '') + '>' +
-          '<span>停止接受報名（勾選後玩家無法報名這個攤位的任何時段）</span></label>' +
+        '<label class="switch"><input type="checkbox" id="fOpen"' + (b.closed ? '' : ' checked') + '>' +
+          '<span id="openLabel"></span></label>' +
       '</div>' +
 
       '<div class="btn-row mt"><button class="btn" id="saveBtn">儲存所有變更</button>' +
@@ -226,26 +240,31 @@ window.VendorView = (function () {
       return;
     }
     box.innerHTML = '<div class="slot-edit slot-edit-head">' +
-        '<span>時段文字</span><span>人數上限</span><span>停止</span><span></span>' +
+        '<span>開始時間</span><span></span><span>結束時間</span>' +
+        '<span class="center">人數上限</span><span class="center">停止報名</span><span></span>' +
       '</div>' + state.slots.map(function (s, i) {
       var taken = Number(s.taken) || 0;
       return '<div class="slot-edit">' +
-        '<input type="text" data-f="label" data-i="' + i + '" value="' + esc(s.label) + '" placeholder="例：10:00 - 10:30" maxlength="40">' +
-        '<input type="number" data-f="capacity" data-i="' + i + '" value="' + (Number(s.capacity) || 0) + '" min="' + taken + '" max="999" title="人數上限">' +
-        '<label class="switch" title="停止這個時段的報名">' +
-          '<input type="checkbox" data-f="closed" data-i="' + i + '"' + (s.closed ? ' checked' : '') + '></label>' +
-        '<button class="btn btn-danger-ghost btn-sm" data-delslot="' + i + '"' +
-          (taken > 0 ? ' disabled title="已有人報名，無法刪除"' : '') + '>刪除</button>' +
-        '<span class="taken">已報名 ' + taken + ' 人</span>' +
+        '<input type="time" data-f="start" data-i="' + i + '" value="' + esc(s.start || '') + '" step="300" aria-label="開始時間">' +
+        '<span class="dash">–</span>' +
+        '<input type="time" data-f="end" data-i="' + i + '" value="' + esc(s.end || '') + '" step="300" aria-label="結束時間">' +
+        '<input class="cell-cap" type="number" data-f="capacity" data-i="' + i + '" value="' +
+          (Number(s.capacity) || 0) + '" min="' + taken + '" max="999" aria-label="人數上限">' +
+        '<span class="cell-center"><label class="switch switch-danger" title="停止這個時段的報名">' +
+          '<input type="checkbox" data-f="closed" data-i="' + i + '"' + (s.closed ? ' checked' : '') + '></label></span>' +
+        '<span class="cell-del"><button class="btn btn-danger-ghost btn-sm" data-delslot="' + i + '"' +
+          (taken > 0 ? ' disabled title="已有人報名，無法刪除"' : '') + '>刪除</button></span>' +
+        (taken > 0 ? '<span class="slot-taken" style="grid-column:1/-1">已報名 ' + taken + ' 人</span>' : '') +
       '</div>';
     }).join('');
 
     UI.$$('[data-f]', box).forEach(function (el) {
       el.onchange = el.oninput = function () {
         var s = state.slots[+el.dataset.i];
-        if (el.dataset.f === 'closed') s.closed = el.checked;
-        else if (el.dataset.f === 'capacity') s.capacity = Math.max(0, parseInt(el.value, 10) || 0);
-        else s.label = el.value;
+        var f = el.dataset.f;
+        if (f === 'closed') s.closed = el.checked;
+        else if (f === 'capacity') s.capacity = Math.max(0, parseInt(el.value, 10) || 0);
+        else s[f] = el.value;
       };
     });
     UI.$$('[data-delslot]', box).forEach(function (btn) {
@@ -258,8 +277,8 @@ window.VendorView = (function () {
       '<h3>快速產生時段</h3>' +
       '<p class="muted small">依照開始時間、結束時間與每段長度，自動切出一整排時段。</p>' +
       '<div class="row">' +
-        '<div class="field"><label>開始時間</label><input type="text" id="qgStart" value="10:00" placeholder="10:00"></div>' +
-        '<div class="field"><label>結束時間</label><input type="text" id="qgEnd" value="16:00" placeholder="16:00"></div>' +
+        '<div class="field"><label>開始時間</label><input type="time" id="qgStart" value="10:00" step="300"></div>' +
+        '<div class="field"><label>結束時間</label><input type="time" id="qgEnd" value="16:00" step="300"></div>' +
       '</div>' +
       '<div class="row">' +
         '<div class="field"><label>每段幾分鐘</label><input type="number" id="qgLen" value="30" min="5" max="240"></div>' +
@@ -271,26 +290,26 @@ window.VendorView = (function () {
       function (root, close) {
         root.querySelector('[data-cancel]').onclick = close;
         root.querySelector('[data-ok]').onclick = function () {
-          var toMin = function (v) {
-            var m = String(v).match(/^(\d{1,2})\s*[:：]\s*(\d{2})$/);
-            return m ? (+m[1]) * 60 + (+m[2]) : null;
-          };
-          var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-          var fmt = function (m) { return pad(Math.floor(m / 60) % 24) + ':' + pad(m % 60); };
+          var toMin = UI.timeToMin;
+          var fmt = UI.minToTime;
 
           var start = toMin(root.querySelector('#qgStart').value);
           var end = toMin(root.querySelector('#qgEnd').value);
           var len = parseInt(root.querySelector('#qgLen').value, 10);
           var cap = parseInt(root.querySelector('#qgCap').value, 10);
 
-          if (start === null || end === null) return UI.err('時間格式請用 HH:MM，例如 10:00');
+          if (start === null || end === null) return UI.err('請選擇開始與結束時間');
           if (end <= start) return UI.err('結束時間要晚於開始時間');
           if (!len || len < 5) return UI.err('每段至少 5 分鐘');
           if ((end - start) / len > 60) return UI.err('一次最多產生 60 個時段');
 
           var made = [];
           for (var t = start; t + len <= end; t += len) {
-            made.push({ id: '', label: fmt(t) + ' - ' + fmt(t + len), capacity: cap, closed: false, taken: 0 });
+            made.push({
+              id: '', start: fmt(t), end: fmt(t + len),
+              label: fmt(t) + ' - ' + fmt(t + len),
+              capacity: cap, closed: false, taken: 0
+            });
           }
           if (!made.length) return UI.err('這個區間產生不出任何時段');
 
@@ -328,10 +347,34 @@ window.VendorView = (function () {
       if (e.dataTransfer && e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
     });
 
+    // 報名開關的說明文字隨狀態更新
+    var openBox = document.getElementById('fOpen');
+    var openLabel = document.getElementById('openLabel');
+    function syncOpenLabel() {
+      openLabel.textContent = openBox.checked
+        ? '開放報名中 — 玩家可以報名這個攤位'
+        : '已停止報名 — 玩家看得到攤位，但無法報名任何時段';
+      openLabel.className = openBox.checked ? '' : 'muted';
+    }
+    openBox.onchange = syncOpenLabel;
+    syncOpenLabel();
+
     document.getElementById('addSlot').onclick = function () {
-      state.slots.push({ id: '', label: '', capacity: 8, closed: false, taken: 0 });
+      // 接續上一個時段的結束時間，少打幾次字
+      var last = state.slots[state.slots.length - 1];
+      var start = last && last.end ? last.end : '10:00';
+      var startMin = UI.timeToMin(start);
+      var len = 30;
+      if (last && last.start && last.end) {
+        var d = UI.timeToMin(last.end) - UI.timeToMin(last.start);
+        if (d > 0) len = d;
+      }
+      state.slots.push({
+        id: '', start: start, end: UI.minToTime((startMin === null ? 600 : startMin) + len),
+        label: '', capacity: last ? last.capacity : 8, closed: false, taken: 0
+      });
       drawSlots();
-      var inputs = UI.$$('#slotEditor [data-f="label"]');
+      var inputs = UI.$$('#slotEditor [data-f="start"]');
       if (inputs.length) inputs[inputs.length - 1].focus();
     };
 
@@ -344,17 +387,29 @@ window.VendorView = (function () {
       var name = document.getElementById('fName').value.trim();
       if (!name) return UI.err('請填寫攤位名稱');
       if (!state.slots.length) return UI.err('請至少新增一個報名時段');
-      var blank = state.slots.filter(function (s) { return !String(s.label).trim(); });
-      if (blank.length) return UI.err('有時段沒有填寫時間文字');
+
+      var bad = null;
+      var slots = state.slots.map(function (s, i) {
+        var a = UI.timeToMin(s.start), b2 = UI.timeToMin(s.end);
+        if (a === null || b2 === null) { bad = bad || ('第 ' + (i + 1) + ' 個時段還沒選好時間'); return s; }
+        if (b2 <= a) { bad = bad || ('第 ' + (i + 1) + ' 個時段的結束時間要晚於開始時間'); return s; }
+        return {
+          id: s.id, start: s.start, end: s.end,
+          label: s.start + ' - ' + s.end,
+          capacity: s.capacity, closed: s.closed
+        };
+      });
+      if (bad) return UI.err(bad);
 
       UI.busy(btn, true, '儲存中…');
       API.vendorSave({
         code: state.code,
         name: name,
         description: document.getElementById('fDesc').value,
+        duration: parseInt(document.getElementById('fDuration').value, 10) || 0,
         photos: state.photos,
-        slots: state.slots,
-        closed: document.getElementById('fClosed').checked
+        slots: slots,
+        closed: !document.getElementById('fOpen').checked
       })
         .then(function (res) {
           UI.ok('已儲存');
