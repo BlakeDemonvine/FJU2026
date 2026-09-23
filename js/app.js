@@ -84,6 +84,7 @@ window.App = (function () {
 
   function start() {
     UI.initTheme();
+    UI.paintGrowth(false);
     window.addEventListener('hashchange', route);
     route();
   }
