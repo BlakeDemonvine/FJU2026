@@ -89,6 +89,7 @@ window.UI = (function () {
 
   /* ---------- 幻燈片 ---------- */
 
+  /* 幻燈片：純自動輪播，照片不可點擊 */
   function slideshowHTML(photos) {
     if (!photos || !photos.length) {
       return '<div class="slideshow"><div class="slideshow-track" style="display:grid;place-items:center">' +
@@ -97,18 +98,21 @@ window.UI = (function () {
     var imgs = photos.map(function (p, i) {
       return '<img src="' + esc(p.url) + '" alt="展示照片 ' + (i + 1) + '"' +
              (i === 0 ? ' class="active"' : '') +
-             ' loading="lazy" data-alt-url="' + esc(p.altUrl || '') + '">';
+             ' draggable="false" data-alt-url="' + esc(p.altUrl || '') + '">';
     }).join('');
     var dots = photos.length > 1
-      ? '<div class="slide-dots">' + photos.map(function (_, i) {
-          return '<i' + (i === 0 ? ' class="active"' : '') + ' data-i="' + i + '"></i>';
+      ? '<div class="slide-dots" aria-hidden="true">' + photos.map(function (_, i) {
+          return '<i' + (i === 0 ? ' class="active"' : '') + '></i>';
         }).join('') + '</div>'
       : '';
-    var arrows = photos.length > 1
-      ? '<button class="slide-btn slide-prev" type="button" aria-label="上一張">‹</button>' +
-        '<button class="slide-btn slide-next" type="button" aria-label="下一張">›</button>'
-      : '';
-    return '<div class="slideshow" data-slideshow><div class="slideshow-track">' + imgs + '</div>' + arrows + dots + '</div>';
+    return '<div class="slideshow" data-slideshow><div class="slideshow-track">' + imgs + '</div>' + dots + '</div>';
+  }
+
+  var slideTimers = [];
+
+  function stopSlideshows() {
+    slideTimers.forEach(clearInterval);
+    slideTimers = [];
   }
 
   function initSlideshows(root) {
@@ -119,58 +123,23 @@ window.UI = (function () {
       var imgs = $$('img', box);
       var dots = $$('.slide-dots i', box);
       var idx = 0;
-      var timer = null;
-
-      function show(i) {
-        idx = (i + imgs.length) % imgs.length;
-        imgs.forEach(function (im, k) { im.classList.toggle('active', k === idx); });
-        dots.forEach(function (d, k) { d.classList.toggle('active', k === idx); });
-      }
-      function auto() {
-        if (imgs.length < 2) return;
-        clearInterval(timer);
-        timer = setInterval(function () { show(idx + 1); }, 4500);
-      }
-
-      var prev = $('.slide-prev', box), next = $('.slide-next', box);
-      if (prev) prev.onclick = function () { show(idx - 1); auto(); };
-      if (next) next.onclick = function () { show(idx + 1); auto(); };
-      dots.forEach(function (d) { d.onclick = function () { show(+d.dataset.i); auto(); }; });
 
       imgs.forEach(function (im) {
-        im.onclick = function () { lightbox(im.src); };
         im.onerror = function () {
           var alt = im.dataset.altUrl;
           if (alt && im.src !== alt) { im.src = alt; im.dataset.altUrl = ''; }
         };
       });
 
-      box.addEventListener('mouseenter', function () { clearInterval(timer); });
-      box.addEventListener('mouseleave', auto);
+      if (imgs.length < 2) return;
 
-      // 手機滑動
-      var startX = null;
-      box.addEventListener('touchstart', function (e) { startX = e.touches[0].clientX; }, { passive: true });
-      box.addEventListener('touchend', function (e) {
-        if (startX === null) return;
-        var dx = e.changedTouches[0].clientX - startX;
-        if (Math.abs(dx) > 40) show(idx + (dx < 0 ? 1 : -1));
-        startX = null; auto();
-      });
-
-      auto();
-    });
-  }
-
-  function lightbox(src) {
-    var box = document.getElementById('lightbox');
-    document.getElementById('lightboxImg').src = src;
-    box.hidden = false;
-    var close = function () { box.hidden = true; document.getElementById('lightboxImg').src = ''; };
-    box.onclick = function (e) { if (e.target === box) close(); };
-    box.querySelector('.lightbox-close').onclick = close;
-    document.addEventListener('keydown', function onKey(e) {
-      if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); }
+      var ms = (window.APP_CONFIG && window.APP_CONFIG.SLIDESHOW_MS) || 3500;
+      slideTimers.push(setInterval(function () {
+        if (!document.body.contains(box)) return;
+        idx = (idx + 1) % imgs.length;
+        imgs.forEach(function (im, k) { im.classList.toggle('active', k === idx); });
+        dots.forEach(function (d, k) { d.classList.toggle('active', k === idx); });
+      }, ms));
     });
   }
 
@@ -226,6 +195,42 @@ window.UI = (function () {
     return s.length === 10 ? s.slice(0, 4) + '-' + s.slice(4, 7) + '-' + s.slice(7) : s;
   }
 
+  /* ---------- 時間 / 時數 ---------- */
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  /** 'HH:MM' → 分鐘數；格式不對回傳 null */
+  function timeToMin(v) {
+    var m = String(v || '').match(/^(\d{1,2})\s*[:：]\s*(\d{1,2})$/);
+    if (!m) return null;
+    var h = +m[1], mi = +m[2];
+    if (h > 23 || mi > 59) return null;
+    return h * 60 + mi;
+  }
+
+  /** 分鐘數 → 'HH:MM' */
+  function minToTime(m) {
+    m = ((m % 1440) + 1440) % 1440;
+    return pad2(Math.floor(m / 60)) + ':' + pad2(m % 60);
+  }
+
+  /** 把 '10:00 - 10:30' 之類的字串拆成 {start, end} */
+  function splitLabel(label) {
+    var m = String(label || '').match(/(\d{1,2}\s*[:：]\s*\d{1,2})\s*[-–~至]\s*(\d{1,2}\s*[:：]\s*\d{1,2})/);
+    if (!m) return { start: '', end: '' };
+    var a = timeToMin(m[1]), b = timeToMin(m[2]);
+    return { start: a === null ? '' : minToTime(a), end: b === null ? '' : minToTime(b) };
+  }
+
+  /** 分鐘數 → 「約 1 小時 10 分鐘」 */
+  function formatDuration(mins) {
+    var n = parseInt(mins, 10);
+    if (!n || n <= 0) return '';
+    if (n < 60) return '約 ' + n + ' 分鐘';
+    var h = Math.floor(n / 60), m = n % 60;
+    return '約 ' + h + ' 小時' + (m ? ' ' + m + ' 分鐘' : '');
+  }
+
   function downloadCSV(filename, rows) {
     var csv = rows.map(function (r) {
       return r.map(function (c) {
@@ -275,8 +280,10 @@ window.UI = (function () {
     loadingHTML: loadingHTML, emptyHTML: emptyHTML, errorHTML: errorHTML,
     toast: toast, ok: ok, err: err,
     modal: modal, confirm: confirmDialog,
-    slideshowHTML: slideshowHTML, initSlideshows: initSlideshows, lightbox: lightbox,
+    slideshowHTML: slideshowHTML, initSlideshows: initSlideshows, stopSlideshows: stopSlideshows,
     store: store, compressImage: compressImage,
-    formatPhone: formatPhone, downloadCSV: downloadCSV, busy: busy, initTheme: initTheme
+    formatPhone: formatPhone, downloadCSV: downloadCSV, busy: busy, initTheme: initTheme,
+    timeToMin: timeToMin, minToTime: minToTime, splitLabel: splitLabel,
+    formatDuration: formatDuration, pad2: pad2
   };
 })();
