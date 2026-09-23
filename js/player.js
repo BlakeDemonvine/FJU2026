@@ -203,9 +203,7 @@ window.PlayerView = (function () {
           API.signup({ boothId: booth.boothId, slotId: slot.id, name: name, phone: phone })
             .then(function (res) {
               UI.store('me', { name: name, phone: phone });
-              var mine = UI.store('mine') || [];
-              mine.push({ signupId: res.signupId, boothId: booth.boothId, boothName: booth.name, slotLabel: slot.label });
-              UI.store('mine', mine);
+              UI.bumpGrowth(1);
               close();
               UI.ok('報名成功！' + esc(booth.name) + ' ' + slot.label);
               if (res.warning) setTimeout(function () { UI.toast(res.warning); }, 900);
@@ -261,6 +259,7 @@ window.PlayerView = (function () {
     }
 
     function paint(list, phone) {
+      UI.setGrowth(list.length);   // 以後端查到的筆數為準，校正左上角的圖示
       if (!list.length) {
         box.innerHTML = '<div class="card">' +
           UI.emptyHTML('📭', '查不到報名紀錄', '請確認姓名與手機號碼和報名時填的完全一樣') + '</div>';
@@ -291,7 +290,7 @@ window.PlayerView = (function () {
             if (!yes) return;
             UI.busy(btn, true, '處理中');
             API.cancelSignup({ signupId: btn.dataset.cancel, phone: phone })
-              .then(function () { UI.ok('已取消報名'); lookup(true); })
+              .then(function () { UI.bumpGrowth(-1); UI.ok('已取消報名'); lookup(true); })
               .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
           });
         };
