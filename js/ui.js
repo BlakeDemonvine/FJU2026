@@ -87,9 +87,8 @@ window.UI = (function () {
     });
   }
 
-  /* ---------- 幻燈片 ---------- */
+  /* ---------- 幻燈片：純自動輪播，照片不可點擊 ---------- */
 
-  /* 幻燈片：純自動輪播，照片不可點擊 */
   function slideshowHTML(photos) {
     if (!photos || !photos.length) {
       return '<div class="slideshow"><div class="slideshow-track" style="display:grid;place-items:center">' +
@@ -157,6 +156,66 @@ window.UI = (function () {
       else localStorage.setItem('fju_' + key, JSON.stringify(value));
     } catch (e) { /* 無痕模式等情況：忽略 */ }
     return null;
+  }
+
+  /* ---------- 成長小圖示 ----------
+   * 左上角的圖示會隨著玩家報名的時段數一路長大：
+   * 0 個 🌱 → 1 個 🌿 → 2 個 🪻 → 3 個 🌷 → 4 個以上 🌸
+   */
+
+  var GROWTH = ['🌱', '🌿', '🪻', '🌷', '🌸'];
+
+  function growthCount() {
+    return Math.max(0, parseInt(store('growth'), 10) || 0);
+  }
+
+  /** 直接設定為確切的報名數（查詢「我的報名」後用這個校正） */
+  function setGrowth(n) {
+    var next = Math.max(0, parseInt(n, 10) || 0);
+    var changed = next !== growthCount();
+    store('growth', next);
+    paintGrowth(changed);
+  }
+
+  /** 報名 +1、取消 -1 */
+  function bumpGrowth(delta) {
+    setGrowth(growthCount() + delta);
+  }
+
+  function growthEmoji(n) {
+    var i = parseInt(n, 10) || 0;
+    if (i < 0) i = 0;
+    if (i > GROWTH.length - 1) i = GROWTH.length - 1;
+    return GROWTH[i];
+  }
+
+  /** 把目前的數字畫到左上角圖示與瀏覽器分頁小圖示上 */
+  function paintGrowth(animate) {
+    var n = growthCount();
+    var emo = growthEmoji(n);
+
+    var el = document.querySelector('.brand-mark');
+    if (el) {
+      if (el.textContent !== emo) {
+        el.textContent = emo;
+        if (animate) {
+          el.classList.remove('pop');
+          void el.offsetWidth;          // 重啟動畫
+          el.classList.add('pop');
+        }
+      }
+      el.title = n
+        ? '你已經報名 ' + n + ' 個時段囉！'
+        : '報名第一個時段，看看左上角會發生什麼事';
+    }
+
+    var icon = document.querySelector('link[rel="icon"]');
+    if (icon) {
+      icon.href = 'data:image/svg+xml,' + encodeURIComponent(
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>" +
+        "<text y='.9em' font-size='90'>" + emo + "</text></svg>");
+    }
+    return n;
   }
 
   /* ---------- 照片壓縮 ---------- */
@@ -283,9 +342,10 @@ window.UI = (function () {
     toast: toast, ok: ok, err: err,
     modal: modal, confirm: confirmDialog,
     slideshowHTML: slideshowHTML, initSlideshows: initSlideshows, stopSlideshows: stopSlideshows,
-    store: store, compressImage: compressImage,
+    store: store, compressImage: compressImage, growthEmoji: growthEmoji,
     formatPhone: formatPhone, downloadCSV: downloadCSV, busy: busy, initTheme: initTheme,
     timeToMin: timeToMin, minToTime: minToTime, splitLabel: splitLabel,
-    formatDuration: formatDuration, pad2: pad2
+    formatDuration: formatDuration, pad2: pad2,
+    setGrowth: setGrowth, bumpGrowth: bumpGrowth, paintGrowth: paintGrowth, growthCount: growthCount
   };
 })();
