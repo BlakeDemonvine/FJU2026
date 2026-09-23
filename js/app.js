@@ -27,12 +27,20 @@ window.App = (function () {
     });
   }
 
+  function showHero(on) {
+    var hero = document.getElementById('hero');
+    if (hero) hero.hidden = !on;
+  }
+
   function route() {
     clearRefresh();
+    UI.stopSlideshows();
     var r = parseHash();
+    showHero(r.name === 'home' || r.name === 'mine');
 
     if (!API.isConfigured()) {
       setActiveNav('');
+      showHero(false);
       app.innerHTML =
         '<div class="card auth-card">' +
           '<h1>還差一步 🔧</h1>' +
@@ -74,15 +82,6 @@ window.App = (function () {
     UI.initTheme();
     window.addEventListener('hashchange', route);
     route();
-
-    var status = document.getElementById('serverStatus');
-    if (!API.isConfigured()) {
-      status.textContent = '尚未設定後端';
-      return;
-    }
-    API.ping()
-      .then(function (res) { status.textContent = '後端連線正常 · ' + res.time; })
-      .catch(function (e) { status.textContent = '後端連線失敗：' + e.message; });
   }
 
   document.addEventListener('DOMContentLoaded', start);
