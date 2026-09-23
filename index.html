@@ -3,9 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>輔大攤位遊戲報名系統</title>
-<meta name="description" content="輔仁大學攤位遊戲線上報名平台">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎪</text></svg>">
+<title>2026 原力萌芽 幸福親子園遊會</title>
+<meta name="description" content="2026 原力萌芽 幸福親子園遊會 — 攤位遊戲線上報名">
+<meta property="og:title" content="2026 原力萌芽 幸福親子園遊會">
+<meta property="og:description" content="手牽手・走進文化・一起長大">
+<meta property="og:image" content="assets/fju2026.jpg">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+<link rel="preload" as="image" href="assets/fju2026.jpg">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -13,10 +17,9 @@
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand" href="#/">
-      <span class="brand-mark">🎪</span>
+      <span class="brand-mark">🌱</span>
       <span class="brand-text">
-        <strong>輔大攤位遊戲</strong>
-        <small>線上報名系統</small>
+        <strong>2026原力萌芽 幸福親子園遊會</strong>
       </span>
     </a>
     <nav class="nav" id="nav">
@@ -29,21 +32,24 @@
   </div>
 </header>
 
+<div class="hero" id="hero" hidden>
+  <img src="assets/fju2026.jpg" alt="2026 原力萌芽 幸福親子園遊會 主視覺">
+</div>
+
 <main id="app" class="app"></main>
 
 <footer class="footer">
-  <span>輔仁大學攤位遊戲報名系統</span>
-  <span class="dot">·</span>
-  <span id="serverStatus">連線中…</span>
+  <div>主辦單位：<strong>輔仁大學民生學院</strong><span class="sep">●</span><strong>輔仁大學原住民族關懷培力棧</strong></div>
+  <div>協辦單位：</div>
 </footer>
 
 <div id="toastHost" class="toast-host" aria-live="polite"></div>
 <div id="modalHost" class="modal-host" hidden></div>
-<div id="lightbox" class="lightbox" hidden><img alt="展示照片" id="lightboxImg"><button class="lightbox-close" type="button">✕</button></div>
 
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/charts.js"></script>
 <script src="js/player.js"></script>
 <script src="js/vendor.js"></script>
 <script src="js/admin.js"></script>
