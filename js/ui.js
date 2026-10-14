@@ -87,8 +87,9 @@ window.UI = (function () {
     });
   }
 
-  /* ---------- 幻燈片：純自動輪播，照片不可點擊 ---------- */
+  /* ---------- 幻燈片 ---------- */
 
+  /* 幻燈片：純自動輪播，照片不可點擊 */
   function slideshowHTML(photos) {
     if (!photos || !photos.length) {
       return '<div class="slideshow"><div class="slideshow-track" style="display:grid;place-items:center">' +
@@ -319,21 +320,49 @@ window.UI = (function () {
     }
   }
 
-  /* ---------- 主題 ---------- */
+  /* ---------- 放大檢視圖片 ---------- */
 
-  function initTheme() {
-    var saved = store('theme');
-    if (saved) document.documentElement.setAttribute('data-theme', saved);
-    var btn = document.getElementById('themeBtn');
-    if (!btn) return;
-    btn.onclick = function () {
-      var cur = document.documentElement.getAttribute('data-theme');
-      var isDark = cur ? cur === 'dark'
-        : window.matchMedia('(prefers-color-scheme: dark)').matches;
-      var next = isDark ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      store('theme', next);
-    };
+  function viewImage(src) {
+    var box = document.getElementById('imgViewer');
+    if (!box) return;
+    document.getElementById('imgViewerImg').src = src;
+    box.hidden = false;
+
+    function close() {
+      box.hidden = true;
+      document.getElementById('imgViewerImg').src = '';
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+
+    box.onclick = function (e) { if (e.target === box) close(); };
+    box.querySelector('.img-viewer-close').onclick = close;
+    document.addEventListener('keydown', onKey);
+  }
+
+  /* ---------- 攤位編號自然排序：1 < 2 < 10，A01 < B01 ---------- */
+
+  function chunkNo(s) {
+    return (String(s == null ? '' : s).match(/\d+|\D+/g) || []).map(function (part) {
+      return /^\d+$/.test(part)
+        ? { num: true, v: parseInt(part, 10) }
+        : { num: false, v: part.toUpperCase() };
+    });
+  }
+
+  function compareBoothNo(a, b) {
+    var ax = chunkNo(a), bx = chunkNo(b);
+    for (var i = 0; i < Math.max(ax.length, bx.length); i++) {
+      var p = ax[i], q = bx[i];
+      if (p === undefined) return -1;
+      if (q === undefined) return 1;
+      if (p.num && q.num) { if (p.v !== q.v) return p.v - q.v; }
+      else {
+        var ps = String(p.v), qs = String(q.v);
+        if (ps !== qs) return ps < qs ? -1 : 1;
+      }
+    }
+    return 0;
   }
 
   return {
@@ -343,7 +372,8 @@ window.UI = (function () {
     modal: modal, confirm: confirmDialog,
     slideshowHTML: slideshowHTML, initSlideshows: initSlideshows, stopSlideshows: stopSlideshows,
     store: store, compressImage: compressImage, growthEmoji: growthEmoji,
-    formatPhone: formatPhone, downloadCSV: downloadCSV, busy: busy, initTheme: initTheme,
+    formatPhone: formatPhone, downloadCSV: downloadCSV, busy: busy,
+    viewImage: viewImage, compareBoothNo: compareBoothNo,
     timeToMin: timeToMin, minToTime: minToTime, splitLabel: splitLabel,
     formatDuration: formatDuration, pad2: pad2,
     setGrowth: setGrowth, bumpGrowth: bumpGrowth, paintGrowth: paintGrowth, growthCount: growthCount
