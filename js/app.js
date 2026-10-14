@@ -36,9 +36,23 @@ window.App = (function () {
     if (hero) hero.hidden = !on;
   }
 
+  /**
+   * 右上角的登出按鈕。攤商／總召登入後由各自的畫面呼叫，
+   * 傳 null 就把按鈕收起來。
+   */
+  function setLogout(handler, label) {
+    var btn = document.getElementById('logoutBtn');
+    if (!btn) return;
+    if (!handler) { btn.hidden = true; btn.onclick = null; return; }
+    btn.hidden = false;
+    btn.textContent = label || '登出';
+    btn.onclick = handler;
+  }
+
   function route() {
     clearRefresh();
     UI.stopSlideshows();
+    setLogout(null);
     var r = parseHash();
     showHero(r.name === 'home' || r.name === 'mine');
 
@@ -83,7 +97,6 @@ window.App = (function () {
   }
 
   function start() {
-    UI.initTheme();
     UI.paintGrowth(false);
     window.addEventListener('hashchange', route);
     route();
@@ -91,5 +104,5 @@ window.App = (function () {
 
   document.addEventListener('DOMContentLoaded', start);
 
-  return { setRefresh: setRefresh, clearRefresh: clearRefresh, route: route };
+  return { setRefresh: setRefresh, clearRefresh: clearRefresh, route: route, setLogout: setLogout };
 })();
