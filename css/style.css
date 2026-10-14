@@ -50,73 +50,6 @@
   --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #161210;
-    --bg-elev: #221B17;
-    --bg-sunken: #2C231D;
-    --surface-chart: #221B17;
-    --text: #F3E8DA;
-    --text-dim: #C0AD9B;
-    --text-faint: #96836F;
-    --border: #3A2F27;
-    --border-strong: #4D3F34;
-    --brand: #F0885E;
-    --brand-strong: #F5A184;
-    --brand-soft: #3A211A;
-    --amber: #F0B45C;
-    --amber-soft: #382913;
-    --forest: #5FC496;
-    --forest-soft: #163025;
-    --teal: #4FB6B6;
-    --sky: #7FC2E2;
-    --ok: #5FC496;
-    --ok-soft: #173024;
-    --warn: #F0B45C;
-    --warn-soft: #362713;
-    --danger: #FF8A97;
-    --danger-soft: #3A1D21;
-    --chart-bar: #F0885E;
-    --chart-bar-2: #5FC496;
-    --chart-grid: #3A2F27;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .45), 0 10px 30px rgba(0, 0, 0, .4);
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, .45);
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --bg: #161210;
-  --bg-elev: #221B17;
-  --bg-sunken: #2C231D;
-  --surface-chart: #221B17;
-  --text: #F3E8DA;
-  --text-dim: #C0AD9B;
-  --text-faint: #96836F;
-  --border: #3A2F27;
-  --border-strong: #4D3F34;
-  --brand: #F0885E;
-  --brand-strong: #F5A184;
-  --brand-soft: #3A211A;
-  --amber: #F0B45C;
-  --amber-soft: #382913;
-  --forest: #5FC496;
-  --forest-soft: #163025;
-  --teal: #4FB6B6;
-  --sky: #7FC2E2;
-  --ok: #5FC496;
-  --ok-soft: #173024;
-  --warn: #F0B45C;
-  --warn-soft: #362713;
-  --danger: #FF8A97;
-  --danger-soft: #3A1D21;
-  --chart-bar: #F0885E;
-  --chart-bar-2: #5FC496;
-  --chart-grid: #3A2F27;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .45), 0 10px 30px rgba(0, 0, 0, .4);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .45);
-  color-scheme: dark;
-}
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -182,12 +115,14 @@ p { margin: 0 0 .8em; }
 .nav a:hover { background: var(--bg-sunken); color: var(--text); text-decoration: none; }
 .nav a.active { background: var(--brand-soft); color: var(--brand); }
 
-.icon-btn {
-  border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-dim);
-  width: 34px; height: 34px; border-radius: 10px; cursor: pointer; font-size: .95rem;
-  display: grid; place-items: center; flex: none;
+/* 右上角登出：只有攤商／總召登入後才出現 */
+.logout-btn {
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  background: var(--bg-elev); color: var(--danger);
+  padding: 6px 14px; border-radius: 99px; cursor: pointer; flex: none;
+  font: inherit; font-size: .83rem; font-weight: 800; white-space: nowrap;
 }
-.icon-btn:hover { border-color: var(--border-strong); color: var(--text); }
+.logout-btn:hover { background: var(--danger-soft); }
 
 /* ---------- 主視覺橫幅 ---------- */
 .hero {
@@ -245,6 +180,29 @@ p { margin: 0 0 .8em; }
   font-size: 1rem; opacity: .6; pointer-events: none;
 }
 
+/* ---------- 活動地圖 ---------- */
+.map-card {
+  margin-bottom: 20px; border-radius: var(--radius); overflow: hidden;
+  border: 1px solid var(--border); background: var(--bg-elev); box-shadow: var(--shadow-sm);
+}
+.map-card img { width: 100%; display: block; cursor: zoom-in; }
+.map-card .map-cap {
+  padding: 9px 15px; font-size: .78rem; color: var(--text-dim);
+  border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px;
+}
+
+/* ---------- 放大檢視 ---------- */
+.img-viewer {
+  position: fixed; inset: 0; z-index: 180; background: rgba(20, 12, 6, .93);
+  display: grid; place-items: center; padding: 20px;
+}
+.img-viewer img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+.img-viewer-close {
+  position: absolute; top: 16px; right: 16px; width: 42px; height: 42px;
+  border-radius: 50%; background: rgba(255, 255, 255, .18); color: #fff;
+  border: 0; font-size: 1.05rem; cursor: pointer;
+}
+
 /* ---------- 攤位列表 ---------- */
 .booth-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); }
 .booth-card {
@@ -266,6 +224,11 @@ p { margin: 0 0 .8em; }
 }
 .booth-body { padding: 15px 16px 16px; display: flex; flex-direction: column; gap: 9px; flex: 1; }
 .booth-body h3 { margin: 0; font-size: 1.06rem; font-weight: 800; }
+.booth-no {
+  display: inline-block; font-size: .72rem; font-weight: 800; letter-spacing: .04em;
+  color: var(--brand); background: var(--brand-soft);
+  padding: 2px 9px; border-radius: 6px; margin-bottom: 4px;
+}
 .booth-desc {
   color: var(--text-dim); font-size: .87rem; margin: 0;
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -333,6 +296,14 @@ input:focus, textarea:focus, select:focus {
 input[type="time"] { font-variant-numeric: tabular-nums; }
 textarea { resize: vertical; min-height: 100px; line-height: 1.6; }
 input::placeholder, textarea::placeholder { color: var(--text-faint); }
+
+.readonly-box {
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--bg-sunken); border: 1px solid var(--border);
+  font-size: .93rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+}
+.readonly-box .small { font-weight: 400; }
 
 .row { display: flex; gap: 12px; flex-wrap: wrap; }
 .row > * { flex: 1; min-width: 140px; }
@@ -520,4 +491,39 @@ td.num { font-variant-numeric: tabular-nums; }
 /* 窄螢幕：標題讓位給選單，主視覺與各頁標題已經說明是什麼活動 */
 @media (max-width: 540px) {
   .brand-text { display: none; }
+}
+
+/* ---------- 窄螢幕：攤位改成左右滑 ---------- */
+.rail-island {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+  z-index: 60; padding: 8px 18px; border-radius: 99px;
+  background: color-mix(in srgb, var(--text) 93%, transparent); color: var(--bg-elev);
+  font-size: .85rem; font-weight: 800; font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow); backdrop-filter: blur(10px);
+  display: flex; align-items: center; gap: 8px; pointer-events: none;
+  transition: opacity .2s;
+}
+.rail-island .rail-no { color: var(--amber); }
+
+@media (min-width: 721px) {
+  .rail-island { display: none !important; }
+}
+
+@media (max-width: 720px) {
+  .booth-grid {
+    display: flex; gap: 14px;
+    grid-template-columns: none;
+    overflow-x: auto; overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    margin: 0 -14px; padding: 2px 14px 10px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .booth-grid::-webkit-scrollbar { display: none; }
+  .booth-grid > .booth-card {
+    flex: 0 0 85%; max-width: 420px; scroll-snap-align: center;
+  }
+  .booth-card:hover { transform: none; box-shadow: var(--shadow-sm); }
+  /* 浮動島不要擋到最後一張卡 */
+  .app { padding-bottom: 76px; }
 }
