@@ -90,15 +90,20 @@ window.AdminView = (function () {
         '<a href="javascript:void 0" data-tab="booths" class="' + (state.tab === 'booths' ? 'active' : '') + '">攤位管理</a>' +
         '<a href="javascript:void 0" data-tab="signups" class="' + (state.tab === 'signups' ? 'active' : '') + '">全部報名資料</a>' +
         '<a href="javascript:void 0" data-tab="refresh">↻ 重新整理</a>' +
-        '<a href="javascript:void 0" data-tab="logout">登出</a>' +
       '</div>' +
       '<div id="aBody"></div>';
+
+    App.setLogout(function () {
+      sess('adminCode', null);
+      state.code = null;
+      App.setLogout(null);
+      renderLogin(app);
+    }, '登出');
 
     UI.$$('[data-tab]', app).forEach(function (a) {
       a.onclick = function () {
         var t = a.dataset.tab;
         if (t === 'refresh') return load(app);
-        if (t === 'logout') { sess('adminCode', null); state.code = null; return renderLogin(app); }
         state.tab = t;
         paint(app);
       };
@@ -116,44 +121,69 @@ window.AdminView = (function () {
 
     body.innerHTML =
       '<div class="card">' +
-        '<div class="card-title"><h2>新增攤商代碼</h2></div>' +
+        '<div class="card-title"><h2>新增攤位</h2></div>' +
         '<div class="row">' +
-          '<input type="text" id="newNote" maxlength="60" placeholder="備註">' +
+          '<input type="text" id="newBoothNo" maxlength="20" placeholder="攤位編號（必填，例如 1 或 A01）">' +
           '<button class="btn" id="newBooth" style="flex:0 0 auto">產生代碼</button>' +
         '</div>' +
       '</div>' +
 
       '<div class="card">' +
         '<div class="card-title"><h2>所有攤位（' + d.booths.length + '）</h2>' +
-          '<button class="btn btn-ghost btn-sm" id="expBooths">⬇ 匯出攤位清單</button></div>' +
+          '<div class="btn-row">' +
+            '<button class="btn btn-ghost btn-sm" id="recountBtn">🛠 重新計算名額</button>' +
+            '<button class="btn btn-ghost btn-sm" id="expBooths">⬇ 匯出攤位清單</button>' +
+          '</div></div>' +
         (d.booths.length
           ? '<div class="table-wrap"><table><thead><tr>' +
-              '<th>代碼</th><th>攤位名稱</th><th>備註</th><th>狀態</th>' +
-              '<th>報名 / 名額</th><th>時段</th><th>操作</th>' +
+              '<th>編號</th><th>代碼</th><th>攤位名稱</th><th>狀態</th>' +
+              '<th>報名 / 名額</th><th>時段</th><th>名單</th><th>操作</th>' +
             '</tr></thead><tbody>' + d.booths.map(boothRow).join('') + '</tbody></table></div>'
-          : UI.emptyHTML('🎪', '還沒有任何攤位', '先在上面產生一組代碼給攤商')) +
+          : UI.emptyHTML('🎪', '還沒有任何攤位', '先在上面填攤位編號產生一組代碼給攤商')) +
       '</div>';
 
-    document.getElementById('newBooth').onclick = function () {
-      var btn = this;
+    function createBooth() {
+      var btn = document.getElementById('newBooth');
+      var input = document.getElementById('newBoothNo');
+      var boothNo = input.value.trim();
+      if (!boothNo) { input.focus(); return UI.err('請先填寫攤位編號'); }
+
       UI.busy(btn, true, '產生中…');
-      API.adminCreateBooth({ adminCode: state.code, note: document.getElementById('newNote').value.trim() })
+      API.adminCreateBooth({ adminCode: state.code, boothNo: boothNo })
         .then(function (res) {
           UI.busy(btn, false);
-          showCode(res.code, '新的攤商代碼');
+          input.value = '';
+          showCode(res.code, res.boothNo + ' 號攤位的代碼');
           load(app);
         })
+        .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
+    }
+
+    document.getElementById('newBooth').onclick = createBooth;
+    document.getElementById('newBoothNo').onkeydown = function (e) {
+      if (e.key === 'Enter') createBooth();
+    };
+
+    document.getElementById('recountBtn').onclick = function () {
+      var btn = this;
+      UI.busy(btn, true, '計算中…');
+      API.adminRecount(state.code)
+        .then(function (res) { UI.busy(btn, false); UI.ok(res.message); load(app); })
         .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
     };
 
     document.getElementById('expBooths').onclick = function () {
-      var rows = [['代碼', '攤位名稱', '備註', '狀態', '已報名', '總名額', '時段數', '建立時間']];
+      var rows = [['攤位編號', '代碼', '攤位名稱', '狀態', '已報名', '總名額', '時段數', '建立時間']];
       d.booths.forEach(function (b) {
-        rows.push([b.code, b.name, b.note, b.closed ? '停止報名' : (b.configured ? '開放中' : '未設定'),
+        rows.push([b.boothNo, b.code, b.name, b.closed ? '停止報名' : (b.configured ? '開放中' : '未設定'),
                    b.taken, b.capacity, b.slots.length, b.createdAt]);
       });
       UI.downloadCSV('攤位清單.csv', rows);
     };
+
+    UI.$$('[data-editno]', body).forEach(function (btn) {
+      btn.onclick = function () { editBoothNo(app, btn.dataset.editno, btn.dataset.cur); };
+    });
 
     UI.$$('[data-copy]', body).forEach(function (btn) {
       btn.onclick = function () { copy(btn.dataset.copy); };
@@ -193,7 +223,7 @@ window.AdminView = (function () {
       btn.onclick = function () {
         var b = d.booths.filter(function (x) { return x.boothId === btn.dataset.slots; })[0];
         UI.modal(
-          '<h3>' + esc(b.name || b.code) + ' 的時段</h3>' +
+          '<h3>' + esc((b.boothNo ? b.boothNo + ' 號　' : '') + (b.name || b.code)) + ' 的時段</h3>' +
           (b.slots.length
             ? '<div class="table-wrap"><table><thead><tr><th>時段</th><th>報名</th><th>狀態</th></tr></thead><tbody>' +
               b.slots.map(function (s) {
@@ -215,20 +245,56 @@ window.AdminView = (function () {
       : '<span class="tag tag-ok">開放中</span>';
 
     return '<tr>' +
+      '<td><span class="booth-no">' + esc(b.boothNo || '—') + '</span> ' +
+        '<button class="btn btn-ghost btn-sm" data-editno="' + esc(b.boothId) + '" ' +
+          'data-cur="' + esc(b.boothNo || '') + '" title="修改攤位編號">✎</button></td>' +
       '<td><span class="code-chip">' + esc(b.code) + '</span> ' +
         '<button class="btn btn-ghost btn-sm" data-copy="' + esc(b.code) + '" title="複製">⧉</button></td>' +
       '<td>' + (b.configured
         ? '<a href="#/booth/' + esc(b.boothId) + '">' + esc(b.name) + '</a>'
         : '<span class="muted">—</span>') + '</td>' +
-      '<td class="muted">' + esc(b.note || '') + '</td>' +
       '<td>' + status + '</td>' +
       '<td class="num">' + b.taken + ' / ' + b.capacity + '</td>' +
       '<td class="num"><button class="btn btn-ghost btn-sm" data-slots="' + esc(b.boothId) + '">' + b.slots.length + ' 個</button></td>' +
+      '<td>' + (b.fileUrl
+        ? '<a class="btn btn-ghost btn-sm" href="' + esc(b.fileUrl) + '" target="_blank" rel="noopener">開啟試算表</a>'
+        : '<span class="tag tag-warn">缺檔案</span>') + '</td>' +
       '<td>' +
         '<button class="btn btn-ghost btn-sm" data-reset="' + esc(b.boothId) + '">換代碼</button> ' +
-        '<button class="btn btn-danger-ghost btn-sm" data-del="' + esc(b.boothId) + '" data-name="' + esc(b.name || b.code) + '">刪除</button>' +
+        '<button class="btn btn-danger-ghost btn-sm" data-del="' + esc(b.boothId) + '" data-name="' +
+          esc((b.boothNo ? b.boothNo + ' 號 ' : '') + (b.name || b.code)) + '">刪除</button>' +
       '</td>' +
     '</tr>';
+  }
+
+  /** 總召可以隨時改攤位編號（攤商自己不行） */
+  function editBoothNo(app, boothId, current) {
+    UI.modal(
+      '<h3>修改攤位編號</h3>' +
+      '<p class="muted small">改完之後，攤位列表的排序與報名紀錄上的編號都會跟著更新。</p>' +
+      '<div class="field"><label for="enNo">攤位編號</label>' +
+        '<input type="text" id="enNo" maxlength="20" value="' + esc(current) + '"></div>' +
+      '<div class="btn-row"><button class="btn btn-ghost" data-cancel>取消</button>' +
+        '<button class="btn" data-ok>儲存</button></div>',
+      function (root, close) {
+        var input = root.querySelector('#enNo');
+        input.focus();
+        input.select();
+        root.querySelector('[data-cancel]').onclick = close;
+
+        function save() {
+          var v = input.value.trim();
+          if (!v) return UI.err('攤位編號不能空白');
+          var btn = root.querySelector('[data-ok]');
+          UI.busy(btn, true, '儲存中…');
+          API.adminSetBoothNo({ adminCode: state.code, boothId: boothId, boothNo: v })
+            .then(function (res) { close(); UI.ok(res.message); load(app); })
+            .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
+        }
+        root.querySelector('[data-ok]').onclick = save;
+        input.onkeydown = function (e) { if (e.key === 'Enter') save(); };
+      }
+    );
   }
 
   function showCode(code, title) {
@@ -286,8 +352,8 @@ window.AdminView = (function () {
       sub: '橫軸為攤位，縱軸為人數。深色是已報名人數，淺色是該攤位的總名額。',
       data: live.map(function (b) {
         return {
-          label: b.name, value: b.taken, capacity: b.capacity,
-          note: b.closed ? '（已停止報名）' : ''
+          label: b.boothNo || b.name, value: b.taken, capacity: b.capacity,
+          note: b.name + (b.closed ? '（已停止報名）' : '')
         };
       })
     });
@@ -296,7 +362,7 @@ window.AdminView = (function () {
     live.forEach(function (b) {
       if (!b.slots.length) return;
       Charts.bar(charts, {
-        title: b.name + '　各時段報名人數',
+        title: (b.boothNo ? b.boothNo + ' 號　' : '') + b.name + '　各時段報名人數',
         sub: '橫軸為時段，縱軸為人數。深色是已報名人數，淺色是該時段的名額上限。',
         alt: true,
         data: b.slots.map(function (s) {
@@ -319,7 +385,8 @@ window.AdminView = (function () {
     function rows() {
       var k = state.keyword.toLowerCase();
       return !k ? d.signups : d.signups.filter(function (s) {
-        return (s.boothName + ' ' + s.name + ' ' + s.phone + ' ' + s.slotLabel).toLowerCase().indexOf(k) > -1;
+        return (s.boothNo + ' ' + s.boothName + ' ' + s.name + ' ' + s.phone + ' ' + s.slotLabel)
+          .toLowerCase().indexOf(k) > -1;
       });
     }
 
@@ -335,9 +402,10 @@ window.AdminView = (function () {
       var list = rows();
       document.getElementById('sTable').innerHTML = list.length
         ? '<div class="table-wrap"><table><thead><tr>' +
-            '<th>#</th><th>攤位</th><th>時段</th><th>姓名</th><th>電話</th><th>報名時間</th>' +
+            '<th>#</th><th>編號</th><th>攤位</th><th>時段</th><th>姓名</th><th>電話</th><th>報名時間</th>' +
           '</tr></thead><tbody>' + list.map(function (s, i) {
             return '<tr><td class="num">' + (i + 1) + '</td>' +
+              '<td><span class="booth-no">' + esc(s.boothNo || '—') + '</span></td>' +
               '<td>' + esc(s.boothName) + '</td>' +
               '<td class="num">' + esc(s.slotLabel) + '</td>' +
               '<td>' + esc(s.name) + '</td>' +
@@ -366,8 +434,8 @@ window.AdminView = (function () {
     };
 
     document.getElementById('expAll').onclick = function () {
-      var out = [['攤位', '時段', '姓名', '電話', '報名時間']];
-      rows().forEach(function (s) { out.push([s.boothName, s.slotLabel, s.name, s.phone, s.createdAt]); });
+      var out = [['攤位編號', '攤位', '時段', '姓名', '電話', '報名時間']];
+      rows().forEach(function (s) { out.push([s.boothNo, s.boothName, s.slotLabel, s.name, s.phone, s.createdAt]); });
       UI.downloadCSV('全部報名資料.csv', out);
     };
   }
