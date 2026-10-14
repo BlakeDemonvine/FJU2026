@@ -9,35 +9,39 @@ window.PlayerView = (function () {
   /* ================= 首頁：所有攤位 ================= */
 
   function renderHome(app) {
+    var mapSrc = (window.APP_CONFIG && window.APP_CONFIG.MAP) || 'assets/map.png';
+
     app.innerHTML =
-      '<div class="searchbar">' +
-        '<span class="ico">🔍</span>' +
-        '<input type="text" id="boothSearch" placeholder="搜尋攤位名稱或關鍵字" aria-label="搜尋攤位">' +
-      '</div>' +
-      '<div id="boothList">' + UI.loadingHTML('正在載入攤位…') + '</div>';
+      '<figure class="map-card" id="mapCard" style="margin:0 0 20px">' +
+        '<img src="' + esc(mapSrc) + '" alt="園遊會攤位地圖" id="mapImg">' +
+        '<figcaption class="map-cap">🗺️ 園遊會攤位地圖　<span class="muted">點一下可以放大</span></figcaption>' +
+      '</figure>' +
+      '<div id="boothList">' + UI.loadingHTML('正在載入攤位…') + '</div>' +
+      '<div class="rail-island" id="railIsland" hidden></div>';
+
+    // 還沒放 map.png 的話就不要留一個破圖
+    var mapImg = document.getElementById('mapImg');
+    mapImg.onerror = function () { document.getElementById('mapCard').hidden = true; };
+    mapImg.onclick = function () { UI.viewImage(mapImg.src); };
 
     var all = [];
 
-    function paint(keyword) {
+    function paint() {
       var box = document.getElementById('boothList');
-      var list = all;
-      if (keyword) {
-        var k = keyword.toLowerCase();
-        list = all.filter(function (b) {
-          return (b.name + ' ' + b.description).toLowerCase().indexOf(k) > -1;
-        });
-      }
-      if (!list.length) {
-        box.innerHTML = keyword
-          ? UI.emptyHTML('🔍', '找不到符合的攤位', '換個關鍵字試試')
-          : UI.emptyHTML('🎪', '目前還沒有攤位開放報名', '攤商正在準備中，等等再來看看吧');
+      var island = document.getElementById('railIsland');
+
+      if (!all.length) {
+        island.hidden = true;
+        box.innerHTML = UI.emptyHTML('🎪', '目前還沒有攤位開放報名', '攤商正在準備中，等等再來看看吧');
         return;
       }
-      // 還能報名的排前面
-      list = list.slice().sort(function (a, b) { return (a.allClosed ? 1 : 0) - (b.allClosed ? 1 : 0); });
 
-      box.innerHTML = '<div class="booth-grid">' + list.map(boothCard).join('') + '</div>';
-      UI.initSlideshows(box);
+      // 依攤位編號排序（1 < 2 < 10，A01 < B01，混用也不會亂）
+      var list = all.slice().sort(function (a, b) {
+        return UI.compareBoothNo(a.boothNo, b.boothNo);
+      });
+
+      box.innerHTML = '<div class="booth-grid" id="boothRail">' + list.map(boothCard).join('') + '</div>';
       UI.$$('.booth-thumb img', box).forEach(function (im) {
         im.onerror = function () {
           var alt = im.dataset.altUrl;
@@ -45,6 +49,48 @@ window.PlayerView = (function () {
           else { im.parentNode.innerHTML = '<span class="placeholder">🎪</span>'; }
         };
       });
+
+      initRail(document.getElementById('boothRail'), island, list);
+    }
+
+    /** 窄螢幕時攤位是左右滑的，底部浮動島顯示現在看到第幾個 */
+    function initRail(rail, island, list) {
+      if (!rail) return;
+
+      function isRail() {
+        return window.matchMedia('(max-width: 720px)').matches;
+      }
+
+      function update() {
+        if (!isRail() || !list.length) { island.hidden = true; return; }
+        var cards = UI.$$('.booth-card', rail);
+        if (!cards.length) { island.hidden = true; return; }
+
+        // 離捲動視窗中心最近的那張卡就是目前這張
+        var mid = rail.scrollLeft + rail.clientWidth / 2;
+        var best = 0, bestGap = Infinity;
+        cards.forEach(function (c, i) {
+          var gap = Math.abs((c.offsetLeft + c.offsetWidth / 2) - mid);
+          if (gap < bestGap) { bestGap = gap; best = i; }
+        });
+
+        var cur = list[best];
+        island.hidden = false;
+        island.innerHTML =
+          (cur.boothNo ? '<span class="rail-no">' + esc(cur.boothNo) + '</span>' : '') +
+          '<span>' + (best + 1) + ' / ' + list.length + '</span>';
+      }
+
+      rail.addEventListener('scroll', function () {
+        if (rail.__tick) return;
+        rail.__tick = requestAnimationFrame(function () {
+          rail.__tick = null;
+          update();
+        });
+      }, { passive: true });
+
+      window.addEventListener('resize', update);
+      update();
     }
 
     function boothCard(b) {
@@ -64,6 +110,7 @@ window.PlayerView = (function () {
       return '<a class="booth-card' + (b.allClosed ? ' is-closed' : '') + '" href="#/booth/' + esc(b.boothId) + '">' +
         '<div class="booth-thumb">' + thumb + badge + '</div>' +
         '<div class="booth-body">' +
+          (b.boothNo ? '<span class="booth-no">' + esc(b.boothNo) + ' 號攤位</span>' : '') +
           '<h3>' + esc(b.name) + '</h3>' +
           '<p class="booth-desc">' + esc(b.description || '這個攤位還沒有填寫簡介') + '</p>' +
           '<div class="booth-foot">' + status +
@@ -77,15 +124,12 @@ window.PlayerView = (function () {
     function load() {
       return API.listBooths().then(function (res) {
         all = res.booths || [];
-        paint(document.getElementById('boothSearch').value.trim());
+        paint();
       }).catch(function (e) {
+        document.getElementById('railIsland').hidden = true;
         document.getElementById('boothList').innerHTML = UI.errorHTML(e.message);
       });
     }
-
-    document.getElementById('boothSearch').addEventListener('input', function () {
-      paint(this.value.trim());
-    });
 
     load();
 
@@ -116,6 +160,7 @@ window.PlayerView = (function () {
       app.innerHTML =
         '<div class="page-head">' +
           '<a class="back" href="#/">← 回到攤位列表</a>' +
+          (b.boothNo ? '<div><span class="booth-no">' + esc(b.boothNo) + ' 號攤位</span></div>' : '') +
           '<h1>' + esc(b.name) + '</h1>' +
           (dur ? '<p class="sub">⏱ 預計遊玩時數 ' + esc(dur) + '</p>' : '') +
         '</div>' +
@@ -269,7 +314,9 @@ window.PlayerView = (function () {
         '<div class="slot-list">' + list.map(function (s) {
           return '<div class="slot-row">' +
             '<div style="flex:1;min-width:180px">' +
-              '<div style="font-weight:700">' + esc(s.boothName) + '</div>' +
+              '<div style="font-weight:700">' +
+                (s.boothNo ? '<span class="booth-no" style="margin:0 6px 0 0">' + esc(s.boothNo) + '</span>' : '') +
+                esc(s.boothName) + '</div>' +
               '<div class="slot-meta">🕘 ' + esc(s.slotLabel) + '　·　報名於 ' + esc(s.createdAt) + '</div>' +
             '</div>' +
             '<div class="spacer"></div>' +
