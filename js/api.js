@@ -65,6 +65,7 @@ window.API = (function () {
   var adminOverview     = function (c)     { return call('adminOverview', { adminCode: c }); };
   var adminCreateBooth  = function (p)     { return call('adminCreateBooth', p); };
   var adminSetBoothNo   = function (p)     { return call('adminSetBoothNo', p); };
+  var adminSetBoothPos  = function (p)     { return call('adminSetBoothPos', p); };
   var adminResetCode    = function (p)     { return call('adminResetCode', p); };
   var adminDeleteBooth  = function (p)     { return call('adminDeleteBooth', p); };
   var adminRecount      = function (c)     { return call('adminRecount', { adminCode: c }); };
@@ -89,6 +90,7 @@ window.API = (function () {
     adminOverview: adminOverview,
     adminCreateBooth: adminCreateBooth,
     adminSetBoothNo: adminSetBoothNo,
+    adminSetBoothPos: adminSetBoothPos,
     adminResetCode: adminResetCode,
     adminDeleteBooth: adminDeleteBooth,
     adminRecount: adminRecount
