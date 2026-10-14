@@ -605,6 +605,32 @@ td.num { font-variant-numeric: tabular-nums; }
     flex: 0 0 var(--card-w); scroll-snap-align: center;
   }
   .booth-card:hover { transform: none; box-shadow: var(--shadow-sm); }
-  /* 浮動島不要擋到最後一張卡 */
-  .app { padding-bottom: 76px; }
+
+  /* 手機版把各區塊壓緊，地圖和攤位卡才能同時出現在一個畫面裡 */
+  .app { padding-bottom: 26px; }
+  .hero { margin-top: 12px; }
+  .map-card { margin-bottom: 14px; }
+  .map-card .map-cap { padding: 7px 13px; font-size: .74rem; }
+  .booth-thumb { aspect-ratio: 16 / 9; }
+  .booth-body { padding: 12px 14px 13px; gap: 7px; }
+  .booth-body h3 { font-size: 1rem; }
+  .booth-desc { font-size: .84rem; }
+  .booth-foot { gap: 6px; }
+  .tag { font-size: .71rem; padding: 2px 9px; }
+  .rail-island { bottom: 14px; padding: 7px 16px; font-size: .82rem; }
+}
+
+/* 螢幕比較矮的手機：地圖整體縮小一點（等比例縮，標記位置不會跑掉），
+   照片也壓扁一些，讓地圖和攤位卡還是能同時看到 */
+@media (max-width: 720px) and (max-height: 720px) {
+  .map-stage { max-width: 84%; margin: 0 auto; }
+  .booth-thumb { aspect-ratio: 2 / 1; }
+  .hero { margin-top: 10px; }
+  .app { padding-top: 12px; }
+}
+
+/* 真的很矮的螢幕（例如 iPhone SE）：簡介收成一行 */
+@media (max-width: 720px) and (max-height: 620px) {
+  .map-stage { max-width: 74%; }
+  .booth-desc { -webkit-line-clamp: 1; line-clamp: 1; }
 }
