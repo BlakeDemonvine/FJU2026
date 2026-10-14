@@ -9,7 +9,7 @@ window.APP_CONFIG = {
    * 在 Apps Script 按「部署 → 新增部署作業 → 網頁應用程式」後取得，
    * 長得像：https://script.google.com/macros/s/AKfycb..../exec
    */
-  GAS_URL: 'https://script.google.com/macros/s/請貼上你的部署ID/exec',
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbzooqnIGkuaNdEIXgvyBgGul6z7Tcyw1iHRbVLe8TotuHI3kYRTXjFLf4La-auozvTkNA/exec',
 
   /** 活動名稱（顯示在頁首與瀏覽器分頁） */
   EVENT_TITLE: '2026原力萌芽 幸福親子園遊會',
