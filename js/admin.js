@@ -88,6 +88,7 @@ window.AdminView = (function () {
 
       '<div class="nav mb" style="margin-left:0">' +
         '<a href="javascript:void 0" data-tab="booths" class="' + (state.tab === 'booths' ? 'active' : '') + '">攤位管理</a>' +
+        '<a href="javascript:void 0" data-tab="map" class="' + (state.tab === 'map' ? 'active' : '') + '">地圖定位</a>' +
         '<a href="javascript:void 0" data-tab="signups" class="' + (state.tab === 'signups' ? 'active' : '') + '">全部報名資料</a>' +
         '<a href="javascript:void 0" data-tab="refresh">↻ 重新整理</a>' +
       '</div>' +
@@ -110,7 +111,166 @@ window.AdminView = (function () {
     });
 
     if (state.tab === 'booths') paintBooths(app);
+    else if (state.tab === 'map') paintMap(app);
     else paintSignups(app);
+  }
+
+  /* ================= 地圖定位 ================= */
+
+  function paintMap(app) {
+    var body = document.getElementById('aBody');
+    var mapSrc = (window.APP_CONFIG && window.APP_CONFIG.MAP) || 'assets/map.png';
+    // 只有填好資料的攤位才需要定位
+    var booths = state.data.booths.filter(function (b) { return b.configured; });
+    var selected = null;
+
+    body.innerHTML =
+      '<div class="card">' +
+        '<div class="card-title"><h2>攤位在地圖上的位置</h2>' +
+          '<span class="small muted" id="placeCount"></span></div>' +
+        '<p class="muted small" style="margin-top:-6px">' +
+          '先點右邊的攤位，再點地圖上的位置就定位好了；已經放上去的標記可以直接拖曳微調。' +
+          '玩家的首頁會看到這些標記。</p>' +
+        (booths.length
+          ? '<div class="map-editor">' +
+              '<div class="map-edit-stage" id="editStage">' +
+                '<img src="' + esc(mapSrc) + '" alt="攤位地圖" id="editMap">' +
+                '<div class="pin-layer" id="editPins"></div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="place-list" id="placeList"></div>' +
+                '<button class="btn btn-ghost btn-sm mt" id="clearPos" disabled>清除選取攤位的位置</button>' +
+              '</div>' +
+            '</div>'
+          : UI.emptyHTML('🎪', '還沒有可以定位的攤位', '攤商把攤位資料填好之後就會出現在這裡')) +
+      '</div>';
+
+    if (!booths.length) return;
+
+    var stage = document.getElementById('editStage');
+    var pinLayer = document.getElementById('editPins');
+    var list = document.getElementById('placeList');
+    var clearBtn = document.getElementById('clearPos');
+
+    document.getElementById('editMap').onerror = function () {
+      body.innerHTML = '<div class="card">' +
+        UI.errorHTML('找不到地圖圖檔，請先把地圖放到 assets/map.png 再回來定位。') + '</div>';
+    };
+
+    function placed(b) { return typeof b.mapX === 'number' && typeof b.mapY === 'number'; }
+
+    function draw() {
+      var done = booths.filter(placed).length;
+      document.getElementById('placeCount').textContent = '已定位 ' + done + ' / ' + booths.length;
+
+      pinLayer.innerHTML = booths.filter(placed).map(function (b) {
+        return '<div class="pin' + (b.boothId === selected ? ' is-active' : '') + '" ' +
+          'data-pin="' + esc(b.boothId) + '" style="left:' + b.mapX + '%;top:' + b.mapY + '%">' +
+          '<span class="pin-dot">' + esc(b.boothNo) + '</span>' +
+          '<span class="pin-name">' + esc(b.name) + '</span>' +
+        '</div>';
+      }).join('');
+
+      list.innerHTML = booths.map(function (b) {
+        var ok = placed(b);
+        return '<button type="button" class="place-row' + (b.boothId === selected ? ' is-selected' : '') +
+          '" data-row="' + esc(b.boothId) + '">' +
+          '<span class="pno">' + esc(b.boothNo) + '</span>' +
+          '<span class="pname">' + esc(b.name) + '</span>' +
+          '<span class="pstate ' + (ok ? 'done' : 'todo') + '">' + (ok ? '已定位' : '未定位') + '</span>' +
+        '</button>';
+      }).join('');
+
+      stage.classList.toggle('placing', !!selected);
+      clearBtn.disabled = !selected || !placed(byId(selected));
+
+      UI.$$('[data-row]', list).forEach(function (row) {
+        row.onclick = function () {
+          selected = selected === row.dataset.row ? null : row.dataset.row;
+          draw();
+        };
+      });
+      bindDrag();
+    }
+
+    function byId(id) {
+      return booths.filter(function (b) { return b.boothId === id; })[0];
+    }
+
+    function save(booth, x, y) {
+      var prevX = booth.mapX, prevY = booth.mapY;
+      booth.mapX = x; booth.mapY = y;
+      draw();
+      API.adminSetBoothPos({ adminCode: state.code, boothId: booth.boothId, mapX: x, mapY: y })
+        .then(function (res) { UI.ok(res.message); })
+        .catch(function (e) {
+          booth.mapX = prevX; booth.mapY = prevY;   // 存不進去就還原
+          draw();
+          UI.err(e.message);
+        });
+    }
+
+    function coords(ev) {
+      var r = stage.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(100, Math.round(((ev.clientX - r.left) / r.width) * 1000) / 10)),
+        y: Math.max(0, Math.min(100, Math.round(((ev.clientY - r.top) / r.height) * 1000) / 10))
+      };
+    }
+
+    // 點地圖 → 把目前選取的攤位放上去
+    stage.onclick = function (ev) {
+      if (!selected || ev.target.closest('.pin')) return;
+      var c = coords(ev);
+      save(byId(selected), c.x, c.y);
+    };
+
+    // 拖曳既有的標記微調位置
+    function bindDrag() {
+      UI.$$('.pin', pinLayer).forEach(function (pin) {
+        pin.onpointerdown = function (ev) {
+          ev.preventDefault();
+          var booth = byId(pin.dataset.pin);
+          if (!booth) return;
+          selected = booth.boothId;
+          pin.classList.add('dragging');
+          pin.setPointerCapture(ev.pointerId);
+          var moved = false;
+
+          pin.onpointermove = function (e2) {
+            moved = true;
+            var c = coords(e2);
+            pin.style.left = c.x + '%';
+            pin.style.top = c.y + '%';
+          };
+          pin.onpointerup = function (e2) {
+            pin.onpointermove = null;
+            pin.onpointerup = null;
+            pin.classList.remove('dragging');
+            var c = coords(e2);
+            if (moved) save(booth, c.x, c.y);
+            else draw();
+          };
+        };
+      });
+    }
+
+    clearBtn.onclick = function () {
+      if (!selected) return;
+      var booth = byId(selected);
+      var prevX = booth.mapX, prevY = booth.mapY;
+      booth.mapX = null; booth.mapY = null;
+      draw();
+      API.adminSetBoothPos({ adminCode: state.code, boothId: booth.boothId, mapX: null, mapY: null })
+        .then(function (res) { UI.ok(res.message); })
+        .catch(function (e) {
+          booth.mapX = prevX; booth.mapY = prevY;
+          draw();
+          UI.err(e.message);
+        });
+    };
+
+    draw();
   }
 
   /* ================= 攤位管理 ================= */
