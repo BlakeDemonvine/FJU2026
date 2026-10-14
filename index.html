@@ -28,7 +28,7 @@
       <a href="#/vendor" data-route="vendor">攤商</a>
       <a href="#/admin" data-route="admin">總召</a>
     </nav>
-    <button class="icon-btn" id="themeBtn" type="button" title="切換深色/淺色" aria-label="切換主題">◐</button>
+    <button class="logout-btn" id="logoutBtn" type="button" hidden>登出</button>
   </div>
 </header>
 
@@ -45,6 +45,10 @@
 
 <div id="toastHost" class="toast-host" aria-live="polite"></div>
 <div id="modalHost" class="modal-host" hidden></div>
+<div id="imgViewer" class="img-viewer" hidden>
+  <img id="imgViewerImg" alt="放大檢視">
+  <button class="img-viewer-close" type="button" aria-label="關閉">✕</button>
+</div>
 
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
