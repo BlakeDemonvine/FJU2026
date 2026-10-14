@@ -186,11 +186,85 @@ p { margin: 0 0 .8em; }
   margin-bottom: 20px; border-radius: var(--radius); overflow: hidden;
   border: 1px solid var(--border); background: var(--bg-elev); box-shadow: var(--shadow-sm);
 }
-.map-card img { width: 100%; display: block; cursor: zoom-in; }
+.map-card img { width: 100%; display: block; }
 .map-card .map-cap {
   padding: 9px 15px; font-size: .78rem; color: var(--text-dim);
-  border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px;
+  border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
 }
+.map-stage { position: relative; line-height: 0; }
+/* 標記層不吃點擊，空白處的點擊才傳得到底下的地圖（放大檢視） */
+.pin-layer { position: absolute; inset: 0; pointer-events: none; }
+.pin-layer .pin { pointer-events: auto; }
+
+/* ---------- 地圖上的攤位標記 ---------- */
+.pin {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  text-decoration: none; line-height: 1.2; z-index: 1;
+}
+.pin:hover { text-decoration: none; z-index: 3; }
+.pin-dot {
+  min-width: 26px; height: 26px; padding: 0 7px; border-radius: 99px;
+  background: var(--brand); color: #fff; border: 2px solid var(--bg-elev);
+  font-size: .74rem; font-weight: 800; font-variant-numeric: tabular-nums;
+  display: grid; place-items: center;
+  box-shadow: 0 2px 7px rgba(58, 42, 30, .4);
+  transition: transform .18s ease, background .18s ease;
+}
+.pin-name {
+  max-width: 130px; padding: 2px 8px; border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 90%, transparent); color: var(--bg-elev);
+  font-size: .68rem; font-weight: 700; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  opacity: 0; transform: translateY(-3px); transition: opacity .18s, transform .18s;
+  pointer-events: none;
+}
+.pin.is-closed .pin-dot { background: var(--text-faint); }
+.pin:hover .pin-dot, .pin.is-active .pin-dot { transform: scale(1.35); }
+.pin.is-active .pin-dot { background: var(--forest); }
+.pin:hover .pin-name, .pin.is-active .pin-name { opacity: 1; transform: translateY(0); }
+.pin.is-active { z-index: 4; }
+.pin.is-active .pin-dot { animation: pinPulse 1.6s ease-out infinite; }
+@keyframes pinPulse {
+  0%   { box-shadow: 0 2px 7px rgba(58,42,30,.4), 0 0 0 0 color-mix(in srgb, var(--forest) 55%, transparent); }
+  70%  { box-shadow: 0 2px 7px rgba(58,42,30,.4), 0 0 0 11px transparent; }
+  100% { box-shadow: 0 2px 7px rgba(58,42,30,.4), 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .pin.is-active .pin-dot { animation: none; } }
+
+/* ---------- 總召的地圖定位工具 ---------- */
+.map-editor { display: grid; grid-template-columns: minmax(0, 1fr) 262px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .map-editor { grid-template-columns: minmax(0, 1fr); } }
+
+.map-edit-stage {
+  position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  overflow: hidden; background: var(--bg-sunken); line-height: 0;
+}
+.map-edit-stage.placing { cursor: crosshair; }
+.map-edit-stage img { width: 100%; display: block; }
+.map-edit-stage .pin { cursor: grab; touch-action: none; }
+.map-edit-stage .pin.dragging { cursor: grabbing; }
+.map-edit-stage .pin-name { opacity: 1; transform: none; }
+
+.place-list { display: flex; flex-direction: column; gap: 6px; max-height: 470px; overflow-y: auto; }
+.place-row {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  padding: 9px 11px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--bg-elev);
+  font: inherit; font-size: .85rem; color: var(--text); cursor: pointer;
+}
+.place-row:hover { border-color: var(--border-strong); }
+.place-row.is-selected { border-color: var(--brand); background: var(--brand-soft); }
+.place-row .pno {
+  flex: none; min-width: 30px; padding: 2px 7px; border-radius: 6px;
+  background: var(--bg-sunken); color: var(--text-dim);
+  font-size: .72rem; font-weight: 800; text-align: center;
+}
+.place-row.is-selected .pno { background: var(--brand); color: #fff; }
+.place-row .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.place-row .pstate { flex: none; font-size: .72rem; font-weight: 800; }
+.place-row .pstate.done { color: var(--forest); }
+.place-row .pstate.todo { color: var(--text-faint); }
 
 /* ---------- 放大檢視 ---------- */
 .img-viewer {
