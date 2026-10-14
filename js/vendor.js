@@ -76,8 +76,16 @@ window.VendorView = (function () {
 
   function paint(app) {
     var b = state.booth;
+    App.setLogout(function () {
+      UI.store('vendorCode', null);
+      state = { code: null, booth: null, tab: 'info', photos: [], slots: [] };
+      App.setLogout(null);
+      renderLogin(app);
+    }, '登出');
+
     app.innerHTML =
       '<div class="page-head">' +
+        (b.boothNo ? '<div><span class="booth-no">' + esc(b.boothNo) + ' 號攤位</span></div>' : '') +
         '<h1>' + esc(b.name || '尚未命名的攤位') + '</h1>' +
         '<p class="sub">攤位代碼 <span class="code-chip">' + esc(b.code) + '</span>' +
         (b.closed ? '　<span class="tag tag-danger">已停止報名</span>' : '') + '</p>' +
@@ -85,18 +93,11 @@ window.VendorView = (function () {
       '<div class="nav mb" style="margin-left:0">' +
         '<a href="javascript:void 0" data-tab="info" class="' + (state.tab === 'info' ? 'active' : '') + '">攤位設定</a>' +
         '<a href="javascript:void 0" data-tab="signups" class="' + (state.tab === 'signups' ? 'active' : '') + '">報名名單</a>' +
-        '<a href="javascript:void 0" data-tab="logout">登出</a>' +
       '</div>' +
       '<div id="vBody"></div>';
 
     UI.$$('[data-tab]', app).forEach(function (a) {
       a.onclick = function () {
-        if (a.dataset.tab === 'logout') {
-          UI.store('vendorCode', null);
-          state = { code: null, booth: null, tab: 'info', photos: [], slots: [] };
-          renderLogin(app);
-          return;
-        }
         state.tab = a.dataset.tab;
         paint(app);
       };
@@ -113,6 +114,11 @@ window.VendorView = (function () {
     document.getElementById('vBody').innerHTML =
       '<div class="card">' +
         '<div class="card-title"><h2>基本資訊</h2></div>' +
+        '<div class="field">' +
+          '<label>攤位編號</label>' +
+          '<div class="readonly-box">' + esc(b.boothNo || '—') +
+            '<span class="muted small">由總召編配，無法自行修改</span></div>' +
+        '</div>' +
         '<div class="field"><label for="fName">攤位名稱 <span class="muted small">（必填）</span></label>' +
           '<input type="text" id="fName" maxlength="40" value="' + esc(b.name) + '" placeholder="例：射氣球大挑戰"></div>' +
         '<div class="field"><label for="fDesc">攤位簡介</label>' +
