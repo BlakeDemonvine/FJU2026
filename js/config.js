@@ -9,13 +9,16 @@ window.APP_CONFIG = {
    * 在 Apps Script 按「部署 → 新增部署作業 → 網頁應用程式」後取得，
    * 長得像：https://script.google.com/macros/s/AKfycb..../exec
    */
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbxGRHG96RGrX05EyZsSMc6uVZDUrtsMhhcMFI5mPmvjgPR9F7fJbIsDnTlCpiw5Evvj/exec',
+  GAS_URL: 'https://script.google.com/macros/s/請貼上你的部署ID/exec',
 
   /** 活動名稱（顯示在頁首與瀏覽器分頁） */
   EVENT_TITLE: '2026原力萌芽 幸福親子園遊會',
 
   /** 主視覺橫幅圖片路徑 */
   BANNER: 'assets/fju2026.jpg',
+
+  /** 首頁的活動地圖（換成自己的圖就好；檔案不存在時會自動隱藏） */
+  MAP: 'assets/map.png',
 
   /** 上傳前把照片壓到這個寬度以內（像素），可降低 Drive 負擔與上傳時間 */
   PHOTO_MAX_WIDTH: 1600,
