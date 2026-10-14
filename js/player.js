@@ -13,8 +13,12 @@ window.PlayerView = (function () {
 
     app.innerHTML =
       '<figure class="map-card" id="mapCard" style="margin:0 0 20px">' +
-        '<img src="' + esc(mapSrc) + '" alt="園遊會攤位地圖" id="mapImg">' +
-        '<figcaption class="map-cap">🗺️ 園遊會攤位地圖　<span class="muted">點一下可以放大</span></figcaption>' +
+        '<div class="map-stage" id="mapStage">' +
+          '<img src="' + esc(mapSrc) + '" alt="園遊會攤位地圖" id="mapImg">' +
+          '<div class="pin-layer" id="pinLayer"></div>' +
+        '</div>' +
+        '<figcaption class="map-cap">🗺️ 園遊會攤位地圖　' +
+          '<span class="muted" id="mapHint">點攤位標記可以直接前往</span></figcaption>' +
       '</figure>' +
       '<div id="boothList">' + UI.loadingHTML('正在載入攤位…') + '</div>' +
       '<div class="rail-island" id="railIsland" hidden></div>';
@@ -22,7 +26,42 @@ window.PlayerView = (function () {
     // 還沒放 map.png 的話就不要留一個破圖
     var mapImg = document.getElementById('mapImg');
     mapImg.onerror = function () { document.getElementById('mapCard').hidden = true; };
-    mapImg.onclick = function () { UI.viewImage(mapImg.src); };
+
+    /** 把有定位的攤位畫到地圖上 */
+    function paintPins(list) {
+      var layer = document.getElementById('pinLayer');
+      var placed = list.filter(function (b) {
+        return typeof b.mapX === 'number' && typeof b.mapY === 'number';
+      });
+
+      mapImg.style.cursor = 'zoom-in';
+      mapImg.onclick = function () { UI.viewImage(mapImg.src); };
+
+      if (!placed.length) {
+        layer.innerHTML = '';
+        document.getElementById('mapHint').textContent = '點一下可以放大';
+        return;
+      }
+
+      document.getElementById('mapHint').textContent = '點標記前往攤位，點空白處放大地圖';
+      layer.innerHTML = placed.map(function (b) {
+        return '<a class="pin' + (b.allClosed ? ' is-closed' : '') + '" ' +
+          'href="#/booth/' + esc(b.boothId) + '" ' +
+          'data-pin="' + esc(b.boothId) + '" ' +
+          'style="left:' + b.mapX + '%;top:' + b.mapY + '%" ' +
+          'title="' + esc(b.boothNo + ' ' + b.name) + '">' +
+          '<span class="pin-dot">' + esc(b.boothNo) + '</span>' +
+          '<span class="pin-name">' + esc(b.name) + '</span>' +
+        '</a>';
+      }).join('');
+    }
+
+    /** highlight 某個攤位的標記（滑到那張卡、或滑鼠移過卡片時） */
+    function focusPin(boothId) {
+      UI.$$('#pinLayer .pin').forEach(function (p) {
+        p.classList.toggle('is-active', p.dataset.pin === boothId);
+      });
+    }
 
     var all = [];
 
@@ -48,6 +87,14 @@ window.PlayerView = (function () {
           if (alt && im.src !== alt) { im.src = alt; im.dataset.altUrl = ''; }
           else { im.parentNode.innerHTML = '<span class="placeholder">🎪</span>'; }
         };
+      });
+
+      paintPins(list);
+
+      // 寬螢幕：滑鼠移到攤位卡上，地圖對應的標記會亮起來
+      UI.$$('.booth-card', box).forEach(function (card, i) {
+        card.addEventListener('mouseenter', function () { focusPin(list[i].boothId); });
+        card.addEventListener('mouseleave', function () { focusPin(null); });
       });
 
       initRail(document.getElementById('boothRail'), island, list);
@@ -79,6 +126,9 @@ window.PlayerView = (function () {
         island.innerHTML =
           (cur.boothNo ? '<span class="rail-no">' + esc(cur.boothNo) + '</span>' : '') +
           '<span>' + (best + 1) + ' / ' + list.length + '</span>';
+
+        // 滑到哪一攤，地圖上就亮哪一攤
+        focusPin(cur.boothId);
       }
 
       rail.addEventListener('scroll', function () {
