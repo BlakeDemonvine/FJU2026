@@ -143,11 +143,9 @@ p { margin: 0 0 .8em; }
   padding: 18px 14px 22px; text-align: center;
   color: var(--text-dim); line-height: 1.9;
 }
-/* 字級跟著視窗縮放，讓主辦單位那行在手機上也能一行放完、不換行 */
-.footer-line {
-  font-size: clamp(9.5px, 2.75vw, 13px);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
+/* 字級跟著視窗縮放；單位名稱本身不斷行，整行放不下時才整段換行 */
+.footer-line { font-size: clamp(11px, 2.7vw, 13px); }
+.footer-line strong, .footer-line .sep { white-space: nowrap; }
 .footer strong { color: var(--text); font-weight: 700; }
 .footer .sep { color: var(--amber); margin: 0 6px; }
 
@@ -580,6 +578,7 @@ td.num { font-variant-numeric: tabular-nums; }
   transition: opacity .2s;
 }
 .rail-island .rail-no { color: var(--amber); }
+.rail-island.is-away { opacity: 0; }
 
 @media (min-width: 721px) {
   .rail-island { display: none !important; }
