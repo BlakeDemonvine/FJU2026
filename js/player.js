@@ -124,7 +124,7 @@ window.PlayerView = (function () {
         var cur = list[best];
         island.hidden = false;
         island.innerHTML =
-          (cur.boothNo ? '<span class="rail-no">' + esc(cur.boothNo) + '</span>' : '') +
+          '<span class="rail-no">攤位</span>' +
           '<span>' + (best + 1) + ' / ' + list.length + '</span>';
 
         // 滑到哪一攤，地圖上就亮哪一攤
@@ -139,8 +139,35 @@ window.PlayerView = (function () {
         });
       }, { passive: true });
 
-      window.addEventListener('resize', update);
+      /** 捲到頁尾時讓浮動島停在頁尾上方，不要蓋住主辦單位 */
+      var footer = document.querySelector('.footer');
+      function reposition() {
+        if (!footer || island.hidden) return;
+        var shown = Math.max(0, window.innerHeight - footer.getBoundingClientRect().top);
+        island.style.bottom = (14 + shown) + 'px';
+      }
+
+      window.addEventListener('scroll', function () {
+        if (window.__islandTick) return;
+        window.__islandTick = requestAnimationFrame(function () {
+          window.__islandTick = null;
+          reposition();
+        });
+      }, { passive: true });
+
+      window.addEventListener('resize', function () { update(); reposition(); });
+
+      // 攤位列整個離開畫面時就把浮動島收起來
+      if (window.IntersectionObserver) {
+        new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            island.classList.toggle('is-away', !e.isIntersecting);
+          });
+        }).observe(rail);
+      }
+
       update();
+      reposition();
     }
 
     function boothCard(b) {
