@@ -85,7 +85,7 @@ window.VendorView = (function () {
 
     app.innerHTML =
       '<div class="page-head">' +
-        (b.boothNo ? '<div><span class="booth-no">' + esc(b.boothNo) + ' 號攤位</span></div>' : '') +
+        (b.boothNo ? '<div><span class="booth-no">攤位：' + esc(b.boothNo) + '</span></div>' : '') +
         '<h1>' + esc(b.name || '尚未命名的攤位') + '</h1>' +
         '<p class="sub">攤位代碼 <span class="code-chip">' + esc(b.code) + '</span>' +
         (b.closed ? '　<span class="tag tag-danger">已停止報名</span>' : '') + '</p>' +
