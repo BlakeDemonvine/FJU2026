@@ -187,7 +187,7 @@ window.PlayerView = (function () {
       return '<a class="booth-card' + (b.allClosed ? ' is-closed' : '') + '" href="#/booth/' + esc(b.boothId) + '">' +
         '<div class="booth-thumb">' + thumb + badge + '</div>' +
         '<div class="booth-body">' +
-          (b.boothNo ? '<span class="booth-no">' + esc(b.boothNo) + ' 號攤位</span>' : '') +
+          (b.boothNo ? '<span class="booth-no">攤位：' + esc(b.boothNo) + '</span>' : '') +
           '<h3>' + esc(b.name) + '</h3>' +
           '<p class="booth-desc">' + esc(b.description || '這個攤位還沒有填寫簡介') + '</p>' +
           '<div class="booth-foot">' + status +
@@ -237,7 +237,7 @@ window.PlayerView = (function () {
       app.innerHTML =
         '<div class="page-head">' +
           '<a class="back" href="#/">← 回到攤位列表</a>' +
-          (b.boothNo ? '<div><span class="booth-no">' + esc(b.boothNo) + ' 號攤位</span></div>' : '') +
+          (b.boothNo ? '<div><span class="booth-no">攤位：' + esc(b.boothNo) + '</span></div>' : '') +
           '<h1>' + esc(b.name) + '</h1>' +
           (dur ? '<p class="sub">⏱ 預計遊玩時數 ' + esc(dur) + '</p>' : '') +
         '</div>' +
