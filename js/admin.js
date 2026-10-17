@@ -313,7 +313,7 @@ window.AdminView = (function () {
         .then(function (res) {
           UI.busy(btn, false);
           input.value = '';
-          showCode(res.code, res.boothNo + ' 號攤位的代碼');
+          showCode(res.code, '攤位：' + res.boothNo + ' 的代碼');
           load(app);
         })
         .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
