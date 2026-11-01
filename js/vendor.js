@@ -241,22 +241,33 @@ window.VendorView = (function () {
       box.innerHTML = '<p class="muted small">還沒有時段，請新增至少一個。</p>';
       return;
     }
+    /* 寬螢幕是一列一個時段（欄位標題在最上面那一行）；
+       手機則是一個時段一張小卡，每個欄位自己帶標籤 —— 手機上沒有那行標題，
+       光看一個空白框和一個開關根本不知道那是什麼。
+       版面怎麼切換都寫在 css 的 .slot-edit 裡，這裡只負責把元素生出來。 */
     box.innerHTML = '<div class="slot-edit slot-edit-head">' +
         '<span>開始時間</span><span></span><span>結束時間</span>' +
         '<span class="center">人數上限</span><span class="center">停止報名</span><span></span>' +
       '</div>' + state.slots.map(function (s, i) {
       var taken = Number(s.taken) || 0;
-      return '<div class="slot-edit">' +
-        '<input type="time" data-f="start" data-i="' + i + '" value="' + esc(s.start || '') + '" step="300" aria-label="開始時間">' +
+      return '<div class="slot-edit' + (s.closed ? ' is-closed' : '') + '">' +
+        '<input class="cell-start" type="time" data-f="start" data-i="' + i + '" value="' +
+          esc(s.start || '') + '" step="300" aria-label="開始時間">' +
         '<span class="dash">–</span>' +
-        '<input type="time" data-f="end" data-i="' + i + '" value="' + esc(s.end || '') + '" step="300" aria-label="結束時間">' +
-        '<input class="cell-cap" type="number" data-f="capacity" data-i="' + i + '" value="' +
-          (Number(s.capacity) || 0) + '" min="' + taken + '" max="999" aria-label="人數上限">' +
-        '<span class="cell-center"><label class="switch switch-danger" title="停止這個時段的報名">' +
-          '<input type="checkbox" data-f="closed" data-i="' + i + '"' + (s.closed ? ' checked' : '') + '></label></span>' +
-        '<span class="cell-del"><button class="btn btn-danger-ghost btn-sm" data-delslot="' + i + '"' +
-          (taken > 0 ? ' disabled title="已有人報名，無法刪除"' : '') + '>刪除</button></span>' +
-        (taken > 0 ? '<span class="slot-taken" style="grid-column:1/-1">已報名 ' + taken + ' 人</span>' : '') +
+        '<input class="cell-end" type="time" data-f="end" data-i="' + i + '" value="' +
+          esc(s.end || '') + '" step="300" aria-label="結束時間">' +
+        '<label class="cell-cap"><span class="cl">人數上限</span>' +
+          '<input type="number" data-f="capacity" data-i="' + i + '" value="' +
+          (Number(s.capacity) || 0) + '" min="' + taken + '" max="999" aria-label="人數上限"></label>' +
+        '<label class="cell-open switch switch-danger" title="打開代表這個時段不開放報名">' +
+          '<span class="cl">停止報名</span>' +
+          '<input type="checkbox" data-f="closed" data-i="' + i + '"' + (s.closed ? ' checked' : '') + '></label>' +
+        '<button class="cell-del btn btn-danger-ghost btn-sm" data-delslot="' + i + '" ' +
+          'aria-label="刪除這個時段"' +
+          (taken > 0 ? ' disabled title="已有人報名，無法刪除"' : '') + '>' +
+          '<span class="dl-full">刪除</span><span class="dl-x" aria-hidden="true">✕</span></button>' +
+        '<span class="slot-no">時段 ' + (i + 1) + '</span>' +
+        (taken > 0 ? '<span class="slot-taken">已報名 ' + taken + ' 人</span>' : '') +
       '</div>';
     }).join('');
 
@@ -264,7 +275,11 @@ window.VendorView = (function () {
       el.onchange = el.oninput = function () {
         var s = state.slots[+el.dataset.i];
         var f = el.dataset.f;
-        if (f === 'closed') s.closed = el.checked;
+        if (f === 'closed') {
+          s.closed = el.checked;
+          var card = el.closest('.slot-edit');
+          if (card) card.classList.toggle('is-closed', el.checked);
+        }
         else if (f === 'capacity') s.capacity = Math.max(0, parseInt(el.value, 10) || 0);
         else s[f] = el.value;
       };
