@@ -175,7 +175,8 @@ window.VendorView = (function () {
     }
     grid.innerHTML = state.photos.map(function (p, i) {
       return '<div class="photo-item">' +
-        '<img src="' + esc(p.url) + '" alt="照片 ' + (i + 1) + '" data-alt-url="' + esc(p.altUrl || '') + '">' +
+        // 管理用的小方格，載 240px 的縮圖就夠了（以前每格都載 1600px）
+        UI.imgTag(p, { alt: '照片 ' + (i + 1), widths: [160, 320], sizes: '120px', lazy: true }) +
         '<button class="x" type="button" data-del="' + i + '" title="移除">✕</button>' +
         '<div class="order">' +
           (i > 0 ? '<button type="button" data-move="' + i + '" data-dir="-1" title="往前">←</button>' : '') +
@@ -184,12 +185,7 @@ window.VendorView = (function () {
       '</div>';
     }).join('');
 
-    UI.$$('img', grid).forEach(function (im) {
-      im.onerror = function () {
-        var alt = im.dataset.altUrl;
-        if (alt && im.src !== alt) { im.src = alt; im.dataset.altUrl = ''; }
-      };
-    });
+    UI.$$('img', grid).forEach(function (im) { UI.bindImgFallback(im); });
     UI.$$('[data-del]', grid).forEach(function (btn) {
       btn.onclick = function () { state.photos.splice(+btn.dataset.del, 1); drawPhotos(); };
     });
