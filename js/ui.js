@@ -49,17 +49,57 @@ window.UI = (function () {
   var ok  = function (m) { toast(m, 'ok'); };
   var err = function (m) { toast(typeof m === 'string' ? m : (m && m.message) || '發生錯誤', 'err'); };
 
+  /* ---------- 裝置判斷 ---------- */
+
+  /** 觸控裝置（手機、平板）：很多互動要用不同做法 */
+  var isTouch = (function () {
+    try { return window.matchMedia('(hover: none)').matches; }
+    catch (e) { return 'ontouchstart' in window; }
+  })();
+
   /* ---------- Modal ---------- */
+
+  /* 開著視窗時把背景鎖住。手機上如果不鎖，手指在視窗上滑會變成在滑背景，
+     而且 iOS 關掉視窗後還會停在奇怪的位置。 */
+  var lockedTop = 0;
+  var lockCount = 0;
+
+  function lockScroll(on) {
+    var b = document.body;
+    if (on) {
+      if (lockCount++ > 0) return;
+      lockedTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+      b.style.position = 'fixed';
+      b.style.top = (-lockedTop) + 'px';
+      b.style.left = '0';
+      b.style.right = '0';
+      b.style.width = '100%';
+    } else {
+      if (--lockCount > 0) return;
+      lockCount = 0;
+      b.style.position = '';
+      b.style.top = '';
+      b.style.left = '';
+      b.style.right = '';
+      b.style.width = '';
+      window.scrollTo(0, lockedTop);
+    }
+  }
 
   function modal(html, onMount) {
     var host = document.getElementById('modalHost');
     host.innerHTML = '<div class="modal">' + html + '</div>';
     host.hidden = false;
+    lockScroll(true);
 
+    var closed = false;
     function close() {
+      if (closed) return;
+      closed = true;
       host.hidden = true;
       host.innerHTML = '';
       document.removeEventListener('keydown', onKey);
+      lockScroll(false);
     }
     function onKey(e) { if (e.key === 'Escape') close(); }
 
@@ -87,20 +127,112 @@ window.UI = (function () {
     });
   }
 
+  /* ---------- 照片網址 ----------
+   * 攤位照片放在 Google Drive。Drive 可以直接幫我們縮圖，所以不要每次都載入
+   * 原尺寸（1600px）——手機上那是最大的拖慢來源。
+   * 這裡依照實際顯示大小去要對應寬度的圖，流量常常省掉八成以上。
+   */
+
+  function photoFileId(p) {
+    if (!p) return '';
+    if (p.fileId) return String(p.fileId);
+    var s = String(p.url || '') + ' ' + String(p.altUrl || '');
+    var m = s.match(/[?&]id=([\w-]{16,})/) || s.match(/\/d\/([\w-]{16,})/);
+    return m ? m[1] : '';
+  }
+
+  /** 主要來源：Drive 縮圖服務 */
+  function photoSrc(p, w) {
+    var id = photoFileId(p);
+    if (!id) return (p && p.url) || '';
+    return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + w;
+  }
+
+  /** 備援來源：googleusercontent（主要來源偶爾會擋） */
+  function photoAltSrc(p, w) {
+    var id = photoFileId(p);
+    if (!id) return (p && p.altUrl) || '';
+    return 'https://lh3.googleusercontent.com/d/' + id + '=w' + w;
+  }
+
+  function srcsetFor(p, widths) {
+    return widths.map(function (w) { return photoSrc(p, w) + ' ' + w + 'w'; }).join(', ');
+  }
+
+  /**
+   * 產生一個會自己挑尺寸、載入失敗會換備援網址的 <img>。
+   * opts = { widths, sizes, cls, alt, lazy, defer }
+   *   defer: true 代表先不要載，等 hydrateImg() 被呼叫才載（幻燈片第二張以後用）
+   */
+  function imgTag(p, opts) {
+    opts = opts || {};
+    var widths = opts.widths || [480, 720];
+    var biggest = widths[widths.length - 1];
+    var attrs =
+      ' alt="' + esc(opts.alt || '') + '"' +
+      ' class="' + esc(opts.cls || '') + '"' +
+      ' draggable="false" decoding="async"' +
+      ' data-fallback="' + esc(photoAltSrc(p, biggest)) + '"' +
+      (opts.lazy ? ' loading="lazy"' : '') +
+      (opts.ariaHidden ? ' aria-hidden="true"' : '');
+
+    if (opts.defer) {
+      return '<img' + attrs +
+        ' data-src="' + esc(photoSrc(p, biggest)) + '"' +
+        ' data-srcset="' + esc(srcsetFor(p, widths)) + '"' +
+        ' sizes="' + esc(opts.sizes || '100vw') + '">';
+    }
+    return '<img' + attrs +
+      ' src="' + esc(photoSrc(p, biggest)) + '"' +
+      ' srcset="' + esc(srcsetFor(p, widths)) + '"' +
+      ' sizes="' + esc(opts.sizes || '100vw') + '">';
+  }
+
+  /** 把延後載入的圖片真的開始載 */
+  function hydrateImg(im) {
+    if (!im || !im.dataset.src) return;
+    im.srcset = im.dataset.srcset || '';
+    im.src = im.dataset.src;
+    im.removeAttribute('data-src');
+    im.removeAttribute('data-srcset');
+  }
+
+  /** 主要網址載不到時自動換備援網址，再失敗就交給 onGiveUp */
+  function bindImgFallback(im, onGiveUp) {
+    im.addEventListener('error', function () {
+      var fb = im.dataset.fallback;
+      if (fb && im.getAttribute('src') !== fb) {
+        im.removeAttribute('srcset');
+        im.removeAttribute('sizes');
+        im.src = fb;
+        im.dataset.fallback = '';
+        return;
+      }
+      if (onGiveUp) onGiveUp(im);
+    });
+  }
+
   /* ---------- 幻燈片 ---------- */
 
-  /* 幻燈片：純自動輪播，照片不可點擊 */
+  /* 幻燈片：純自動輪播，照片不可點擊。
+     第一張立刻載入，其餘等快輪到了才載，手機開攤位頁不會一次拉十張圖。 */
+  var SLIDE_W = [640, 1000];
+  var SLIDE_SIZES = '(max-width: 720px) 94vw, 1000px';
+
   function slideshowHTML(photos) {
     if (!photos || !photos.length) {
       return '<div class="slideshow"><div class="slideshow-track" style="display:grid;place-items:center">' +
              '<span style="font-size:2.8rem;opacity:.3">🎈</span></div></div>';
     }
     var imgs = photos.map(function (p, i) {
-      var src = esc(p.url), alt = esc(p.altUrl || '');
-      return '<div class="slide' + (i === 0 ? ' active' : '') + '">' +
-        '<img class="slide-bg" src="' + src + '" alt="" aria-hidden="true" draggable="false" data-alt-url="' + alt + '">' +
-        '<img class="slide-img" src="' + src + '" alt="展示照片 ' + (i + 1) + '" draggable="false" data-alt-url="' + alt + '">' +
-      '</div>';
+      // 底層那張只是拿來模糊當背景，用 64px 的小圖就夠了（省流量也省 GPU）
+      var bg = '<img class="slide-bg" src="' + esc(photoSrc(p, 64)) + '" alt="" aria-hidden="true" ' +
+               'draggable="false" decoding="async" data-fallback="">';
+      var main = imgTag(p, {
+        cls: 'slide-img', alt: '展示照片 ' + (i + 1),
+        widths: SLIDE_W, sizes: SLIDE_SIZES, defer: i > 0
+      });
+      return '<div class="slide' + (i === 0 ? ' active' : '') + '">' + bg + main + '</div>';
     }).join('');
     var dots = photos.length > 1
       ? '<div class="slide-dots" aria-hidden="true">' + photos.map(function (_, i) {
@@ -126,23 +258,48 @@ window.UI = (function () {
       var dots = $$('.slide-dots i', box);
       var idx = 0;
 
-      $$('img', box).forEach(function (im) {
-        im.onerror = function () {
-          var alt = im.dataset.altUrl;
-          if (alt && im.src !== alt) { im.src = alt; im.dataset.altUrl = ''; }
-        };
-      });
+      $$('.slide-img', box).forEach(function (im) { bindImgFallback(im); });
 
       if (slides.length < 2) return;
+
+      function preload(i) {
+        var s = slides[(i + slides.length) % slides.length];
+        if (s) hydrateImg(s.querySelector('.slide-img'));
+      }
+      preload(1);   // 先把下一張準備好，換頁時才不會空白
 
       var ms = (window.APP_CONFIG && window.APP_CONFIG.SLIDESHOW_MS) || 3500;
       slideTimers.push(setInterval(function () {
         if (!document.body.contains(box)) return;
+        if (document.hidden) return;          // 分頁在背景就暫停，省電省流量
         idx = (idx + 1) % slides.length;
         slides.forEach(function (s, k) { s.classList.toggle('active', k === idx); });
         dots.forEach(function (d, k) { d.classList.toggle('active', k === idx); });
+        preload(idx + 1);
       }, ms));
     });
+  }
+
+  /* ---------- 短期快取 ----------
+   * 攤位清單存在分頁快取裡，回上一頁或重新整理時可以「先畫出來再去更新」，
+   * 手機上不用每次都對著轉圈圈等後端。
+   */
+
+  function cacheGet(key, maxAgeMs) {
+    try {
+      var raw = sessionStorage.getItem('fjuc_' + key);
+      if (!raw) return null;
+      var o = JSON.parse(raw);
+      if (!o || typeof o.t !== 'number') return null;
+      if (maxAgeMs && Date.now() - o.t > maxAgeMs) return null;
+      return o.v;
+    } catch (e) { return null; }
+  }
+
+  function cacheSet(key, value) {
+    try {
+      sessionStorage.setItem('fjuc_' + key, JSON.stringify({ t: Date.now(), v: value }));
+    } catch (e) { /* 空間不足或無痕模式：放棄快取就好 */ }
   }
 
   /* ---------- 本機儲存 ---------- */
@@ -225,27 +382,47 @@ window.UI = (function () {
     var maxW = (window.APP_CONFIG && window.APP_CONFIG.PHOTO_MAX_WIDTH) || 1600;
     var quality = (window.APP_CONFIG && window.APP_CONFIG.PHOTO_QUALITY) || 0.82;
 
+    function draw(source, sw, sh) {
+      var scale = Math.min(1, maxW / sw);
+      var w = Math.max(1, Math.round(sw * scale));
+      var h = Math.max(1, Math.round(sh * scale));
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(source, 0, 0, w, h);
+      var dataUrl = canvas.toDataURL('image/jpeg', quality);
+      canvas.width = canvas.height = 1;      // 手機記憶體有限，用完馬上放掉
+      return { data: dataUrl.split(',')[1], mimeType: 'image/jpeg', filename: file.name };
+    }
+
+    /* 手機拍的照片動輒一兩千萬畫素。原本的做法是先把整個檔案轉成 base64 字串
+       再塞進 <img>，一張照片在記憶體裡等於同時存在三份，手機很容易就當掉或整頁重整。
+       改用 object URL 之後少掉最大的那一份，上傳也明顯變快，
+       而且照片的方向（EXIF）瀏覽器會自己處理，跟原本一樣正。 */
     return new Promise(function (resolve, reject) {
+      var url = window.URL && URL.createObjectURL ? URL.createObjectURL(file) : null;
+      var img = new Image();
+
+      function done(fn) {
+        return function () {
+          if (url) URL.revokeObjectURL(url);
+          fn();
+        };
+      }
+
+      img.onerror = done(function () { reject(new Error('這個檔案不是有效的圖片')); });
+      img.onload = done(function () {
+        try { resolve(draw(img, img.naturalWidth || img.width, img.naturalHeight || img.height)); }
+        catch (e) { reject(new Error('照片太大了，請先縮小一點再上傳')); }
+      });
+
+      if (url) { img.src = url; return; }
+
       var reader = new FileReader();
       reader.onerror = function () { reject(new Error('讀取檔案失敗')); };
-      reader.onload = function () {
-        var img = new Image();
-        img.onerror = function () { reject(new Error('這個檔案不是有效的圖片')); };
-        img.onload = function () {
-          var scale = Math.min(1, maxW / img.width);
-          var w = Math.round(img.width * scale);
-          var h = Math.round(img.height * scale);
-          var canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          var ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, w, h);
-          ctx.drawImage(img, 0, 0, w, h);
-          var dataUrl = canvas.toDataURL('image/jpeg', quality);
-          resolve({ data: dataUrl.split(',')[1], mimeType: 'image/jpeg', filename: file.name });
-        };
-        img.src = reader.result;
-      };
+      reader.onload = function () { img.src = reader.result; };
       reader.readAsDataURL(file);
     });
   }
@@ -327,11 +504,16 @@ window.UI = (function () {
     if (!box) return;
     document.getElementById('imgViewerImg').src = src;
     box.hidden = false;
+    lockScroll(true);
 
+    var closed = false;
     function close() {
+      if (closed) return;
+      closed = true;
       box.hidden = true;
       document.getElementById('imgViewerImg').src = '';
       document.removeEventListener('keydown', onKey);
+      lockScroll(false);
     }
     function onKey(e) { if (e.key === 'Escape') close(); }
 
@@ -374,6 +556,10 @@ window.UI = (function () {
     store: store, compressImage: compressImage, growthEmoji: growthEmoji,
     formatPhone: formatPhone, downloadCSV: downloadCSV, busy: busy,
     viewImage: viewImage, compareBoothNo: compareBoothNo,
+    isTouch: isTouch, lockScroll: lockScroll,
+    photoSrc: photoSrc, photoAltSrc: photoAltSrc, imgTag: imgTag,
+    hydrateImg: hydrateImg, bindImgFallback: bindImgFallback,
+    cacheGet: cacheGet, cacheSet: cacheSet,
     timeToMin: timeToMin, minToTime: minToTime, splitLabel: splitLabel,
     formatDuration: formatDuration, pad2: pad2,
     setGrowth: setGrowth, bumpGrowth: bumpGrowth, paintGrowth: paintGrowth, growthCount: growthCount
