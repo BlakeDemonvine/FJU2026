@@ -57,12 +57,10 @@
 
 html, body { margin: 0; padding: 0; }
 
-/* 捲動容器放在 html（不要放在 body），捲動對齊才會穩定。
-   scroll-padding-top 讓「對齊點」停在黏在上面的頂列下方，不會被蓋住。 */
-html {
-  overflow-x: hidden;
-  scroll-padding-top: var(--topbar-h, 52px);
-}
+/* scroll-padding-top 讓「對齊點」停在黏在上面的頂列下方，不會被蓋住。
+   這裡刻意不設 overflow：在 html 或 body 設 overflow 會讓 Safari 重新判斷
+   「到底是誰在捲動」，捲動對齊就有機會整個失效。 */
+html { scroll-padding-top: var(--topbar-h, 52px); }
 
 body {
   background: var(--bg);
@@ -694,10 +692,15 @@ td.num { font-variant-numeric: tabular-nums; }
      往下滑的時候會自動停在這個位置，不會停在一半。
      高度全部從 --fit-h 推算，所以不管哪一支手機（高的、矮的、有瀏海的）
      都會自己算出合適的比例，不用為每種尺寸各寫一套規則。 */
-  html { scroll-snap-type: y proximity; }
-  .hero, .home-fit { scroll-snap-align: start; }
+  /* 只有在攤位首頁才開捲動對齊（html 的 .snap-home 由 app.js 掛上）。
+     其他頁面（攤商、總召）是長表單，開了會變成一直被吸到底部。
+     用 mandatory 而不是 proximity：proximity 在 Safari 上常常根本不觸發，
+     使用者就會覺得「還是會滑歪掉」。 */
+  html.snap-home { scroll-snap-type: y mandatory; }
+  html.snap-home .hero,
+  html.snap-home .home-fit { scroll-snap-align: start; }
   /* 頁尾也要是一個「停得住」的位置，不然再往下滑會一直被吸回去，主辦單位就永遠看不到 */
-  .footer { scroll-snap-align: end; }
+  html.snap-home .footer { scroll-snap-align: end; }
 
   .home-fit {
     /* svh 是「網址列展開時」的高度，是最保守的值：
@@ -792,4 +795,3 @@ td.num { font-variant-numeric: tabular-nums; }
   tbody tr:hover { background: transparent; }
   .logout-btn:hover { background: var(--bg-elev); }
 }
-
