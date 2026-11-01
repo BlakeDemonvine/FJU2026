@@ -152,6 +152,18 @@ window.AdminView = (function () {
     var list = document.getElementById('placeList');
     var clearBtn = document.getElementById('clearPos');
 
+    // 定位用的地圖也讓標記跟著縮放，手機上才不會整片疊在一起
+    (function () {
+      function sizeEditPins() {
+        var w = stage.clientWidth || 0;
+        if (!w) return;
+        stage.style.setProperty('--pin-scale', Math.max(0.55, Math.min(1, w / 760)).toFixed(3));
+      }
+      sizeEditPins();
+      if (window.ResizeObserver) new ResizeObserver(sizeEditPins).observe(stage);
+      else window.addEventListener('resize', sizeEditPins);
+    })();
+
     document.getElementById('editMap').onerror = function () {
       body.innerHTML = '<div class="card">' +
         UI.errorHTML('找不到地圖圖檔，請先把地圖放到 assets/map.png 再回來定位。') + '</div>';
