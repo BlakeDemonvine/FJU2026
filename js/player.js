@@ -6,29 +6,54 @@ window.PlayerView = (function () {
 
   var esc = UI.esc;
 
+  /* 頂列的高度（字體載入後、轉向後都可能變），量出來寫進 CSS，
+     首頁那一塊才算得出「剛好一個畫面」要多高。 */
+  function measureChrome() {
+    var bar = document.querySelector('.topbar');
+    var h = bar ? Math.round(bar.getBoundingClientRect().height) : 52;
+    document.documentElement.style.setProperty('--topbar-h', h + 'px');
+  }
+
+  if (!window.__chromeBound) {
+    window.__chromeBound = true;
+    window.addEventListener('resize', measureChrome);
+    window.addEventListener('orientationchange', function () { setTimeout(measureChrome, 200); });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureChrome);
+  }
+
   /* ================= 首頁：所有攤位 ================= */
 
   function renderHome(app) {
     var mapSrc = (window.APP_CONFIG && window.APP_CONFIG.MAP) || 'assets/map.png';
 
+    /* .home-fit 是「地圖在上、攤位在下」的那一整塊。
+       手機上它剛好等於一個畫面的高度，往下滑會自動停在這裡（見 style.css 的 scroll-snap）。 */
     app.innerHTML =
-      '<figure class="map-card" id="mapCard" style="margin:0 0 20px">' +
-        '<div class="map-stage" id="mapStage">' +
-          '<img src="' + esc(mapSrc) + '" alt="園遊會攤位地圖" id="mapImg" ' +
-            'decoding="async" fetchpriority="high">' +
-          '<div class="pin-layer" id="pinLayer"></div>' +
-        '</div>' +
-        '<figcaption class="map-cap">🗺️ 園遊會攤位地圖　' +
-          '<span class="muted" id="mapHint">點攤位標記可以直接前往</span></figcaption>' +
-      '</figure>' +
-      '<div id="boothList">' + UI.loadingHTML('正在載入攤位…') + '</div>' +
-      '<div class="rail-island" id="railIsland" hidden></div>';
+      '<section class="home-fit" id="homeFit">' +
+        '<figure class="map-card" id="mapCard">' +
+          '<div class="map-stage" id="mapStage">' +
+            '<img src="' + esc(mapSrc) + '" alt="園遊會攤位地圖" id="mapImg" ' +
+              'decoding="async" fetchpriority="high">' +
+            '<div class="pin-layer" id="pinLayer"></div>' +
+          '</div>' +
+          '<figcaption class="map-cap">🗺️ 園遊會攤位地圖　' +
+            '<span class="muted" id="mapHint">點攤位標記可以直接前往</span></figcaption>' +
+        '</figure>' +
+        '<div id="boothList">' + UI.loadingHTML('正在載入攤位…') + '</div>' +
+        '<div class="rail-island" id="railIsland" hidden></div>' +
+      '</section>';
 
     var mapImg = document.getElementById('mapImg');
     var mapStage = document.getElementById('mapStage');
+    var homeFit = document.getElementById('homeFit');
 
-    // 還沒放 map.png 的話就不要留一個破圖
-    mapImg.onerror = function () { document.getElementById('mapCard').hidden = true; };
+    measureChrome();
+
+    // 還沒放 map.png 的話就不要留一個破圖，也不用硬撐成一個畫面高
+    mapImg.onerror = function () {
+      document.getElementById('mapCard').hidden = true;
+      homeFit.classList.add('no-map');
+    };
 
     /* 地圖載好之後把真實比例寫進 CSS，版面就不會因為圖片晚到而跳動；
        手機上也能用 svh 限制高度而不影響標記位置。 */
@@ -161,9 +186,11 @@ window.PlayerView = (function () {
       if (!all.length) {
         island.hidden = true;
         lastSignature = null;
+        homeFit.classList.add('is-empty');   // 沒有攤位就不要硬撐一個畫面高
         box.innerHTML = UI.emptyHTML('🎪', '目前還沒有攤位開放報名', '攤商正在準備中，等等再來看看吧');
         return;
       }
+      homeFit.classList.remove('is-empty');
 
       // 依攤位編號排序（1 < 2 < 10，A01 < B01，混用也不會亂）
       var list = all.slice().sort(function (a, b) {
@@ -254,44 +281,20 @@ window.PlayerView = (function () {
         });
       }, { passive: true });
 
-      /** 捲到頁尾時讓浮動島停在頁尾上方，不要蓋住主辦單位 */
-      var footer = document.querySelector('.footer');
-      function reposition() {
-        if (!footer || island.hidden || !document.body.contains(island)) return;
-        var shown = Math.max(0, window.innerHeight - footer.getBoundingClientRect().top);
-        island.style.bottom = 'calc(' + (14 + shown) + 'px + env(safe-area-inset-bottom, 0px))';
-      }
+      /* 浮動島現在就排在攤位卡的正下方（不再是蓋在畫面上的固定元素），
+         所以永遠不會擋到卡片上的字，也不用再跟頁尾閃避。 */
 
       /* 視窗層級的監聽只掛一次。以前每次重畫攤位列都會再掛一組，
          手機捲動時同一件事被算好幾遍，越用越卡。 */
       if (!renderHome.__winBound) {
         renderHome.__winBound = true;
-        window.addEventListener('scroll', function () {
-          if (window.__islandTick) return;
-          window.__islandTick = requestAnimationFrame(function () {
-            window.__islandTick = null;
-            if (renderHome.__reposition) renderHome.__reposition();
-          });
-        }, { passive: true });
         window.addEventListener('resize', function () {
           if (renderHome.__update) renderHome.__update();
-          if (renderHome.__reposition) renderHome.__reposition();
         });
       }
       renderHome.__update = update;
-      renderHome.__reposition = reposition;
-
-      // 攤位列整個離開畫面時就把浮動島收起來
-      if (window.IntersectionObserver) {
-        new IntersectionObserver(function (entries) {
-          entries.forEach(function (e) {
-            island.classList.toggle('is-away', !e.isIntersecting);
-          });
-        }).observe(rail);
-      }
 
       update();
-      reposition();
     }
 
     function boothCard(b) {
@@ -318,7 +321,7 @@ window.PlayerView = (function () {
         '<div class="booth-thumb">' + thumb + badge + '</div>' +
         '<div class="booth-body">' +
           (b.boothNo ? '<span class="booth-no">攤位：' + esc(b.boothNo) + '</span>' : '') +
-          '<h3>' + esc(b.name) + '</h3>' +
+          '<h3><span>' + esc(b.name) + '</span></h3>' +
           '<p class="booth-desc">' + esc(b.description || '這個攤位還沒有填寫簡介') + '</p>' +
           '<div class="booth-foot">' + status +
             '<span class="tag tag-muted">' + b.slotCount + ' 個時段</span>' +
