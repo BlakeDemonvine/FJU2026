@@ -338,7 +338,14 @@ p { margin: 0 0 .8em; }
 .booth-card.is-closed { opacity: .72; }
 
 .booth-thumb { aspect-ratio: 16 / 10; background: var(--bg-sunken); display: grid; place-items: center; overflow: hidden; position: relative; }
-.booth-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 用絕對定位把照片撐滿，不要靠 height:100%。
+   手機版的照片框高度是用 flex 分配的，Safari 在這種情況下常常把子元素的
+   百分比高度算成 auto，照片就會縮成中間一條，上下留一大片底色。
+   絕對定位是直接貼齊外框，不需要「百分比高度」這一步，所有瀏覽器都一致。 */
+.booth-thumb img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
 .booth-thumb .placeholder { font-size: 2.4rem; opacity: .4; }
 .booth-thumb .count-badge {
   position: absolute; right: 9px; bottom: 9px;
