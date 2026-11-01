@@ -8,9 +8,48 @@
 <meta property="og:title" content="2026 原力萌芽 幸福親子園遊會">
 <meta property="og:description" content="手牽手・走進文化・一起長大">
 <meta property="og:image" content="assets/fju2026.jpg">
+<meta name="theme-color" content="#FBF4E6">
+<meta name="format-detection" content="telephone=no">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
-<link rel="preload" as="image" href="assets/fju2026.jpg">
+
+<!-- 手機（尤其是 4G）連到 Google 要先做一次 TLS 交握，先把連線建好可以省下幾百毫秒。
+     script.googleusercontent.com 是 Apps Script 真正回資料的網域，一定要加。 -->
+<link rel="preconnect" href="https://script.google.com" crossorigin>
+<link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+<link rel="preconnect" href="https://drive.google.com" crossorigin>
+<link rel="preconnect" href="https://lh3.googleusercontent.com" crossorigin>
+
+<link rel="preload" as="image" href="assets/fju2026.jpg" fetchpriority="low">
 <link rel="stylesheet" href="css/style.css">
+
+<script src="js/config.js"></script>
+<script>
+/* 在 CSS 與其他 JS 都還沒下載完之前，就先把「攤位清單」的請求送出去。
+   Apps Script 本來就要等一兩秒，這段等待跟前端載入同時進行，
+   手機上通常可以少等 0.3～1 秒。 */
+(function () {
+  try {
+    var u = window.APP_CONFIG && window.APP_CONFIG.GAS_URL;
+    if (!u || u.indexOf('請貼上') > -1) return;
+    // 只有一進來就是攤位首頁才先送；從其他頁進來送了也沒人用
+    if (location.hash && location.hash !== '#/' && location.hash !== '#') return;
+    window.__preload = {
+      action: 'listBooths',
+      t: Date.now(),
+      p: fetch(u, {
+        method: 'POST', redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: '{"action":"listBooths"}'
+      }).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+    };
+    // 沒人接手也不要變成未處理的錯誤
+    window.__preload.p.catch(function () {});
+  } catch (e) { /* 舊瀏覽器沒有 fetch：照原本流程走就好 */ }
+})();
+</script>
 </head>
 <body>
 
@@ -33,7 +72,7 @@
 </header>
 
 <div class="hero" id="hero" hidden>
-  <img src="assets/fju2026.jpg" alt="2026 原力萌芽 幸福親子園遊會 主視覺">
+  <img src="assets/fju2026.jpg" alt="2026 原力萌芽 幸福親子園遊會 主視覺" decoding="async">
 </div>
 
 <main id="app" class="app"></main>
@@ -51,7 +90,6 @@
   <button class="img-viewer-close" type="button" aria-label="關閉">✕</button>
 </div>
 
-<script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/charts.js"></script>
