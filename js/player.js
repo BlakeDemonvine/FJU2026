@@ -14,7 +14,8 @@ window.PlayerView = (function () {
     app.innerHTML =
       '<figure class="map-card" id="mapCard" style="margin:0 0 20px">' +
         '<div class="map-stage" id="mapStage">' +
-          '<img src="' + esc(mapSrc) + '" alt="園遊會攤位地圖" id="mapImg">' +
+          '<img src="' + esc(mapSrc) + '" alt="園遊會攤位地圖" id="mapImg" ' +
+            'decoding="async" fetchpriority="high">' +
           '<div class="pin-layer" id="pinLayer"></div>' +
         '</div>' +
         '<figcaption class="map-cap">🗺️ 園遊會攤位地圖　' +
@@ -23,9 +24,37 @@ window.PlayerView = (function () {
       '<div id="boothList">' + UI.loadingHTML('正在載入攤位…') + '</div>' +
       '<div class="rail-island" id="railIsland" hidden></div>';
 
-    // 還沒放 map.png 的話就不要留一個破圖
     var mapImg = document.getElementById('mapImg');
+    var mapStage = document.getElementById('mapStage');
+
+    // 還沒放 map.png 的話就不要留一個破圖
     mapImg.onerror = function () { document.getElementById('mapCard').hidden = true; };
+
+    /* 地圖載好之後把真實比例寫進 CSS，版面就不會因為圖片晚到而跳動；
+       手機上也能用 svh 限制高度而不影響標記位置。 */
+    function applyMapRatio() {
+      if (!mapImg.naturalWidth || !mapImg.naturalHeight) return;
+      mapStage.style.setProperty('--map-ar', (mapImg.naturalWidth / mapImg.naturalHeight).toFixed(4));
+      sizePins();
+    }
+    if (mapImg.complete) applyMapRatio();
+    mapImg.addEventListener('load', applyMapRatio);
+
+    /* 標記大小跟著地圖一起縮放。固定 26px 的標記在手機上等於放大了兩三倍，
+       距離近的兩攤就會疊在一起（A1 蓋住 A5 就是這樣來的）。 */
+    function sizePins() {
+      var w = mapStage.clientWidth || 0;
+      if (!w) return;
+      var scale = Math.max(0.52, Math.min(1, w / 760));
+      mapStage.style.setProperty('--pin-scale', scale.toFixed(3));
+      if (renderHome.__spread) renderHome.__spread();
+    }
+    sizePins();
+    if (window.ResizeObserver) {
+      new ResizeObserver(sizePins).observe(mapStage);
+    } else {
+      window.addEventListener('resize', sizePins);
+    }
 
     /** 把有定位的攤位畫到地圖上 */
     function paintPins(list) {
@@ -43,7 +72,11 @@ window.PlayerView = (function () {
         return;
       }
 
-      document.getElementById('mapHint').textContent = '點標記前往攤位，點空白處放大地圖';
+      // 手機上標題列放不下長句子，會折成兩行吃掉版面
+      document.getElementById('mapHint').textContent =
+        window.matchMedia('(max-width: 520px)').matches
+          ? '點標記前往攤位' : '點標記前往攤位，點空白處放大地圖';
+      renderHome.__spread = spreadPins;
       layer.innerHTML = placed.map(function (b) {
         return '<a class="pin' + (b.allClosed ? ' is-closed' : '') + '" ' +
           'href="#/booth/' + esc(b.boothId) + '" ' +
@@ -54,6 +87,61 @@ window.PlayerView = (function () {
           '<span class="pin-name">' + esc(b.name) + '</span>' +
         '</a>';
       }).join('');
+
+      spreadPins();
+    }
+
+    /* 位置很接近的攤位（例如 A1 跟 A5 只差幾公尺），在手機的小地圖上
+       會整個疊在一起。這裡把擠在一起的標記互相推開一點點，
+       每個標記最多只偏離真實位置一個標記的距離，還是看得出大概在哪裡。 */
+    function spreadPins() {
+      var pins = UI.$$('#pinLayer .pin');
+      if (pins.length < 2) return;
+
+      var w = mapStage.clientWidth, h = mapStage.clientHeight;
+      if (!w || !h) return;
+
+      var P = pins.map(function (el) {
+        var dot = el.querySelector('.pin-dot');
+        el.style.removeProperty('--nx');
+        el.style.removeProperty('--ny');
+        return {
+          el: el,
+          x: parseFloat(el.style.left) / 100 * w,
+          y: parseFloat(el.style.top) / 100 * h,
+          r: Math.max(dot.offsetWidth, dot.offsetHeight) / 2 || 10,
+          ox: 0, oy: 0
+        };
+      });
+
+      for (var pass = 0; pass < 40; pass++) {
+        var moved = false;
+        for (var i = 0; i < P.length; i++) {
+          for (var j = i + 1; j < P.length; j++) {
+            var a = P[i], b = P[j];
+            var dx = (b.x + b.ox) - (a.x + a.ox);
+            var dy = (b.y + b.oy) - (a.y + a.oy);
+            var d = Math.sqrt(dx * dx + dy * dy);
+            if (d < 0.01) { dx = (i % 2 ? 1 : -1); dy = 0.3; d = 1; }  // 完全重疊時給個方向
+            var want = a.r + b.r + 3;
+            if (d >= want) continue;
+            var push = (want - d) / 2 * 0.6;
+            var ux = dx / d, uy = dy / d;
+            a.ox -= ux * push; a.oy -= uy * push;
+            b.ox += ux * push; b.oy += uy * push;
+            moved = true;
+          }
+        }
+        if (!moved) break;
+      }
+
+      P.forEach(function (p) {
+        var m = Math.sqrt(p.ox * p.ox + p.oy * p.oy);
+        var max = p.r * 1.8;
+        if (m > max) { p.ox *= max / m; p.oy *= max / m; }
+        p.el.style.setProperty('--nx', p.ox.toFixed(1) + 'px');
+        p.el.style.setProperty('--ny', p.oy.toFixed(1) + 'px');
+      });
     }
 
     /** highlight 某個攤位的標記（滑到那張卡、或滑鼠移過卡片時） */
@@ -64,6 +152,7 @@ window.PlayerView = (function () {
     }
 
     var all = [];
+    var lastSignature = null;
 
     function paint() {
       var box = document.getElementById('boothList');
@@ -71,6 +160,7 @@ window.PlayerView = (function () {
 
       if (!all.length) {
         island.hidden = true;
+        lastSignature = null;
         box.innerHTML = UI.emptyHTML('🎪', '目前還沒有攤位開放報名', '攤商正在準備中，等等再來看看吧');
         return;
       }
@@ -80,24 +170,48 @@ window.PlayerView = (function () {
         return UI.compareBoothNo(a.boothNo, b.boothNo);
       });
 
+      /* 背景自動更新時，如果資料其實沒變就什麼都不要動。
+         不然手機上每兩分鐘整列攤位會重畫一次，正在看的位置被彈回第一攤，
+         圖片也會重新解碼閃一下。 */
+      var sig = JSON.stringify(list.map(function (b) {
+        return [b.boothId, b.boothNo, b.name, b.description, b.duration,
+                b.totalRemaining, b.slotCount, b.allClosed, b.mapX, b.mapY,
+                (b.photos && b.photos[0] && (b.photos[0].fileId || b.photos[0].url)) || ''];
+      }));
+      if (sig === lastSignature && document.getElementById('boothRail')) {
+        paintPins(list);
+        return;
+      }
+
+      // 更新前先記住左右滑到哪裡，畫完再滑回去
+      var oldRail = document.getElementById('boothRail');
+      var keepScroll = oldRail ? oldRail.scrollLeft : 0;
+
+      lastSignature = sig;
       box.innerHTML = '<div class="booth-grid" id="boothRail">' + list.map(boothCard).join('') + '</div>';
+
       UI.$$('.booth-thumb img', box).forEach(function (im) {
-        im.onerror = function () {
-          var alt = im.dataset.altUrl;
-          if (alt && im.src !== alt) { im.src = alt; im.dataset.altUrl = ''; }
-          else { im.parentNode.innerHTML = '<span class="placeholder">🎪</span>'; }
-        };
+        UI.bindImgFallback(im, function (el) {
+          el.parentNode.replaceChild(
+            Object.assign(document.createElement('span'), {
+              className: 'placeholder', textContent: '🎪'
+            }), el);
+        });
       });
 
       paintPins(list);
 
       // 寬螢幕：滑鼠移到攤位卡上，地圖對應的標記會亮起來
-      UI.$$('.booth-card', box).forEach(function (card, i) {
-        card.addEventListener('mouseenter', function () { focusPin(list[i].boothId); });
-        card.addEventListener('mouseleave', function () { focusPin(null); });
-      });
+      if (!UI.isTouch) {
+        UI.$$('.booth-card', box).forEach(function (card, i) {
+          card.addEventListener('mouseenter', function () { focusPin(list[i].boothId); });
+          card.addEventListener('mouseleave', function () { focusPin(null); });
+        });
+      }
 
-      initRail(document.getElementById('boothRail'), island, list);
+      var rail = document.getElementById('boothRail');
+      if (rail && keepScroll) rail.scrollLeft = keepScroll;
+      initRail(rail, island, list);
     }
 
     /** 窄螢幕時攤位是左右滑的，底部浮動島顯示現在看到第幾個 */
@@ -109,6 +223,7 @@ window.PlayerView = (function () {
       }
 
       function update() {
+        if (!document.body.contains(rail)) return;   // 已經換頁了就不用再算
         if (!isRail() || !list.length) { island.hidden = true; return; }
         var cards = UI.$$('.booth-card', rail);
         if (!cards.length) { island.hidden = true; return; }
@@ -142,20 +257,29 @@ window.PlayerView = (function () {
       /** 捲到頁尾時讓浮動島停在頁尾上方，不要蓋住主辦單位 */
       var footer = document.querySelector('.footer');
       function reposition() {
-        if (!footer || island.hidden) return;
+        if (!footer || island.hidden || !document.body.contains(island)) return;
         var shown = Math.max(0, window.innerHeight - footer.getBoundingClientRect().top);
-        island.style.bottom = (14 + shown) + 'px';
+        island.style.bottom = 'calc(' + (14 + shown) + 'px + env(safe-area-inset-bottom, 0px))';
       }
 
-      window.addEventListener('scroll', function () {
-        if (window.__islandTick) return;
-        window.__islandTick = requestAnimationFrame(function () {
-          window.__islandTick = null;
-          reposition();
+      /* 視窗層級的監聽只掛一次。以前每次重畫攤位列都會再掛一組，
+         手機捲動時同一件事被算好幾遍，越用越卡。 */
+      if (!renderHome.__winBound) {
+        renderHome.__winBound = true;
+        window.addEventListener('scroll', function () {
+          if (window.__islandTick) return;
+          window.__islandTick = requestAnimationFrame(function () {
+            window.__islandTick = null;
+            if (renderHome.__reposition) renderHome.__reposition();
+          });
+        }, { passive: true });
+        window.addEventListener('resize', function () {
+          if (renderHome.__update) renderHome.__update();
+          if (renderHome.__reposition) renderHome.__reposition();
         });
-      }, { passive: true });
-
-      window.addEventListener('resize', function () { update(); reposition(); });
+      }
+      renderHome.__update = update;
+      renderHome.__reposition = reposition;
 
       // 攤位列整個離開畫面時就把浮動島收起來
       if (window.IntersectionObserver) {
@@ -172,11 +296,17 @@ window.PlayerView = (function () {
 
     function boothCard(b) {
       var photo = (b.photos && b.photos[0]) || null;
+      // 卡片上的縮圖只需要幾百像素，跟詳情頁的大圖用不同尺寸
       var thumb = photo
-        ? '<img src="' + esc(photo.url) + '" alt="' + esc(b.name) + '" loading="lazy" data-alt-url="' + esc(photo.altUrl || '') + '">'
+        ? UI.imgTag(photo, {
+            alt: b.name, lazy: true,
+            widths: [400, 720],
+            sizes: '(max-width: 720px) 86vw, 320px'
+          })
         : '<span class="placeholder">🎪</span>';
-      var badge = (b.photos && b.photos.length > 1)
-        ? '<span class="count-badge">📷 ' + b.photos.length + '</span>' : '';
+      var photoCount = (b.photoCount !== undefined && b.photoCount !== null)
+        ? b.photoCount : (b.photos || []).length;
+      var badge = photoCount > 1 ? '<span class="count-badge">📷 ' + photoCount + '</span>' : '';
 
       var status = b.allClosed
         ? '<span class="tag tag-danger">已截止報名</span>'
@@ -198,17 +328,28 @@ window.PlayerView = (function () {
       '</a>';
     }
 
-    function load() {
+    function load(background) {
       return API.listBooths().then(function (res) {
         all = res.booths || [];
+        UI.cacheSet('booths', all);
         paint();
       }).catch(function (e) {
+        if (background) return;          // 已經有畫面了就不要把它換成錯誤訊息
         document.getElementById('railIsland').hidden = true;
         document.getElementById('boothList').innerHTML = UI.errorHTML(e.message);
       });
     }
 
-    load();
+    /* 先用上一次的資料把畫面畫出來，再到後端拿最新的。
+       手機上回上一頁、或重新整理，攤位會「立刻」出現，不用對著轉圈圈等。 */
+    var cached = UI.cacheGet('booths', 10 * 60 * 1000);
+    var hadCache = false;
+    if (cached && cached.length) {
+      all = cached;
+      paint();
+      hadCache = true;
+    }
+    load(hadCache);
 
     if (window.APP_CONFIG.AUTO_REFRESH_MS > 0) {
       App.setRefresh(load, window.APP_CONFIG.AUTO_REFRESH_MS);
@@ -218,17 +359,26 @@ window.PlayerView = (function () {
   /* ================= 攤位詳情 ================= */
 
   function renderBooth(app, boothId) {
+    var painted = false;
     app.innerHTML = UI.loadingHTML('載入攤位資訊…');
 
-    function load() {
+    function load(background) {
       return API.getBooth(boothId).then(function (res) {
+        UI.cacheSet('booth_' + boothId, res.booth);
         paint(res.booth);
       }).catch(function (e) {
+        if (background) return;
         app.innerHTML = '<a class="back" href="#/">← 回到攤位列表</a>' + UI.errorHTML(e.message);
       });
     }
 
+    /* 先畫快取裡的版本（名額可能稍舊，所以馬上去後端更新一次）。
+       手機上從攤位列表點進來，照片與簡介會立刻出現。 */
+    var cachedBooth = UI.cacheGet('booth_' + boothId, 5 * 60 * 1000);
+    if (cachedBooth) { paint(cachedBooth); painted = true; }
+
     function paint(b) {
+      UI.stopSlideshows();
       var closedNotice = b.allClosed
         ? '<div class="notice notice-warn">這個攤位目前所有時段都已經停止報名了。</div>' : '';
 
@@ -256,6 +406,7 @@ window.PlayerView = (function () {
         '</div>';
 
       UI.initSlideshows(app);
+      painted = true;
 
       UI.$$('[data-signup]', app).forEach(function (btn) {
         btn.onclick = function () {
@@ -286,7 +437,7 @@ window.PlayerView = (function () {
       '</div>';
     }
 
-    load();
+    load(painted);
   }
 
   /* ================= 報名表單 ================= */
@@ -309,7 +460,8 @@ window.PlayerView = (function () {
       function (root, close) {
         var nameEl = root.querySelector('#suName');
         var phoneEl = root.querySelector('#suPhone');
-        nameEl.focus();
+        // 手機上不要自動叫出鍵盤，不然一打開視窗畫面就被鍵盤吃掉一半
+        if (!UI.isTouch) nameEl.focus();
 
         root.querySelector('[data-cancel]').onclick = close;
 
