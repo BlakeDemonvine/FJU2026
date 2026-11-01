@@ -560,15 +560,25 @@ td.num { font-variant-numeric: tabular-nums; }
 }
 .dropzone:hover, .dropzone.over { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
 
-/* ---------- 時段編輯器 ---------- */
+/* ---------- 時段編輯器 ----------
+   寬螢幕：一列一個時段，欄位標題統一放在最上面那一行。 */
 .slot-edit {
   display: grid;
-  grid-template-columns: 1fr 12px 1fr 92px 96px 72px;
+  grid-template-columns: 1fr 12px 1fr 96px 108px 78px;
   gap: 10px; align-items: center; padding: 10px 0;
 }
 .slot-edit + .slot-edit { border-top: 1px solid var(--border); }
 .slot-edit .dash { text-align: center; color: var(--text-faint); font-weight: 700; }
-.slot-edit .cell-center { display: flex; justify-content: center; }
+.slot-edit .cell-cap { display: flex; align-items: center; }
+.slot-edit .cell-cap input { width: 100%; text-align: center; }
+.slot-edit .cell-open { display: flex; justify-content: center; }
+/* 欄位標籤在寬螢幕上由最上面那一行負責，這裡藏起來 */
+.slot-edit .cl, .slot-edit .slot-no, .slot-edit .dl-x { display: none; }
+.slot-edit .slot-taken { grid-column: 1 / -1; }
+.slot-edit.is-closed .cell-start,
+.slot-edit.is-closed .cell-end,
+.slot-edit.is-closed .cell-cap { opacity: .55; }
+
 .slot-edit-head {
   font-size: .76rem; font-weight: 800; color: var(--text-dim);
   padding-bottom: 6px; border-bottom: 1px solid var(--border);
@@ -577,14 +587,70 @@ td.num { font-variant-numeric: tabular-nums; }
 .slot-edit-head span { white-space: nowrap; }
 .slot-edit-head .center { text-align: center; }
 .slot-taken { font-size: .76rem; color: var(--text-faint); padding: 0 0 8px; }
+
+/* 手機：一個時段一張小卡，每個欄位自己帶標籤。
+   原本是把寬螢幕那套硬塞進三欄，結果變成「一個沒有標題的空白框」加
+   「一個裸露的開關」再加「一條佔滿整行的紅色刪除鈕」，又高又看不懂。 */
 @media (max-width: 720px) {
-  .slot-edit, .slot-edit-head { grid-template-columns: 1fr 12px 1fr; }
-  .slot-edit-head span:nth-child(n+4) { display: none; }
-  .slot-edit > *:nth-child(n+4) { grid-column: span 1; }
-  .slot-edit .cell-cap { grid-column: 1 / 2; }
-  .slot-edit .cell-center { grid-column: 2 / 4; justify-content: flex-start; }
-  .slot-edit .cell-del { grid-column: 1 / -1; }
-  .slot-edit .cell-del .btn { width: 100%; }
+  .slot-edit-head { display: none; }
+
+  .slot-edit, .slot-edit + .slot-edit {
+    position: relative;
+    /* 只有三欄，開始與結束時間寬度才會完全一樣；
+       刪除鈕用絕對定位放在右上角，不佔格子，也就不會把右邊那一格撐寬 */
+    grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr);
+    grid-template-areas:
+      "ttl ttl cnt"
+      "beg dsh fin"
+      "cap cap opn";
+    gap: 10px 8px;
+    padding: 12px 13px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-elev);
+    margin-top: 10px;
+  }
+  .slot-edit .cell-start { grid-area: beg; }
+  .slot-edit .dash       { grid-area: dsh; }
+  .slot-edit .cell-end   { grid-area: fin; }
+  .slot-edit .cell-cap   { grid-area: cap; gap: 8px; }
+  .slot-edit .cell-open  { grid-area: opn; justify-content: flex-end; gap: 8px; }
+  .slot-edit .slot-no    { grid-area: ttl; }
+  .slot-edit .slot-taken { grid-area: cnt; }
+
+  /* 每個欄位的小標籤 */
+  .slot-edit .cl {
+    display: inline; font-size: .78rem; font-weight: 700;
+    color: var(--text-dim); white-space: nowrap;
+  }
+  .slot-edit .slot-no {
+    display: inline-block; font-size: .78rem; font-weight: 800;
+    color: var(--brand); letter-spacing: .02em;
+  }
+  .slot-edit .slot-taken {
+    grid-column: auto; padding: 0 40px 0 0;   /* 右邊留給刪除鈕 */
+    font-size: .74rem; text-align: right; white-space: nowrap;
+  }
+
+  .slot-edit .cell-start, .slot-edit .cell-end { text-align: center; padding: 9px 4px; }
+  .slot-edit .cell-cap input { width: 100%; min-width: 0; max-width: 88px; text-align: center; }
+
+  /* 刪除縮成右上角一個小圖示，不要再佔掉一整行 */
+  .slot-edit .dl-full { display: none; }
+  .slot-edit .dl-x { display: inline; font-size: .95rem; line-height: 1; }
+  .slot-edit .cell-del {
+    position: absolute; top: 9px; right: 10px;
+    width: 34px; height: 34px; padding: 0; border-radius: 50%;
+    border-color: var(--border-strong); color: var(--text-faint);
+  }
+  .slot-edit .cell-del:active { border-color: var(--danger); color: var(--danger); }
+  .slot-edit .cell-del:disabled { opacity: .3; }
+
+  /* 已停止報名的時段整張淡化，一眼就看得出來 */
+  .slot-edit.is-closed { background: var(--bg-sunken); }
+  .slot-edit.is-closed .cell-start,
+  .slot-edit.is-closed .cell-end,
+  .slot-edit.is-closed .cell-cap { opacity: .5; }
 }
 
 /* ---------- Toast ---------- */
