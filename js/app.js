@@ -56,6 +56,18 @@ window.App = (function () {
     var r = parseHash();
     showHero(r.name === 'home' || r.name === 'mine');
 
+    /* 「滑下去會停在上半地圖、下半攤位」這個效果只在攤位首頁開。
+       其他頁如果也開著，手機上會一直被吸到頁尾。
+
+       除了切換 class，還直接寫 inline style 把它關掉：
+       Safari 有時候會晚一拍才套用 class 的變更，結果換頁的瞬間捲動對齊還開著，
+       而這時候畫面上唯一的對齊點是頁尾 —— 就會整個被甩到最下面。
+       inline style 是立刻生效的，不會有這個時間差。 */
+    var html = document.documentElement;
+    var atHome = r.name === 'home';
+    html.classList.toggle('snap-home', atHome);
+    html.style.scrollSnapType = atHome ? '' : 'none';
+
     if (!API.isConfigured()) {
       setActiveNav('');
       showHero(false);
@@ -94,6 +106,26 @@ window.App = (function () {
         PlayerView.renderHome(app);
     }
     window.scrollTo(0, 0);
+
+    /* 換頁後再確認兩次位置。有些手機瀏覽器會在內容換掉之後自己又捲一次，
+       使用者一點進攤位就被丟到最底下。只要這段期間使用者沒有自己碰螢幕，
+       位置不對就拉回最上面。 */
+    if (!atHome) {
+      var touched = false;
+      var onTouch = function () { touched = true; };
+      window.addEventListener('touchstart', onTouch, { passive: true });
+      var reassert = function () {
+        if (!touched && (window.pageYOffset || document.documentElement.scrollTop) > 0) {
+          window.scrollTo(0, 0);
+        }
+      };
+      requestAnimationFrame(reassert);
+      setTimeout(reassert, 150);
+      setTimeout(function () {
+        reassert();
+        window.removeEventListener('touchstart', onTouch);
+      }, 400);
+    }
   }
 
   function start() {
