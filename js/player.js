@@ -586,3 +586,4 @@ window.PlayerView = (function () {
 
   return { renderHome: renderHome, renderBooth: renderBooth, renderMine: renderMine };
 })();
+
