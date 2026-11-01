@@ -64,13 +64,30 @@ body {
   font-size: 16px;
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
+  /* 手機瀏覽器的網址列會伸縮，100vh 會讓頁面高度一直變、畫面跟著抖；
+     dvh 才是「現在真正看得到的高度」 */
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  /* 手機上不小心左右滑到整頁跑掉 */
+  overflow-x: hidden;
+  /* 轉成橫式時 iOS 會自己放大字，關掉才會跟設計一致 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* 點擊不要有 300ms 延遲，也不要有半透明的藍色方塊 */
+a, button, .btn, input, select, textarea, summary, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 a { color: var(--brand); text-decoration: none; }
-a:hover { text-decoration: underline; }
+/* hover 只給真的有滑鼠的裝置。手機沒有 hover，點過之後樣式會卡住不退 */
+@media (hover: hover) {
+  a:hover { text-decoration: underline; }
+}
 h1, h2, h3, h4 { line-height: 1.3; margin: 0 0 .4em; letter-spacing: -.005em; }
 h1 { font-size: 1.6rem; }
 h2 { font-size: 1.2rem; }
@@ -87,6 +104,8 @@ p { margin: 0 0 .8em; }
 .topbar-inner {
   max-width: var(--maxw); margin: 0 auto;
   padding: 10px 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
   display: flex; align-items: center; gap: 14px;
 }
 .brand { display: flex; align-items: center; gap: 9px; color: var(--text); text-decoration: none; flex: 1 1 auto; min-width: 0; overflow: hidden; }
@@ -135,12 +154,19 @@ p { margin: 0 0 .8em; }
 }
 
 /* ---------- 版面 ---------- */
-.app { flex: 1; max-width: var(--maxw); width: 100%; margin: 0 auto; padding: 20px var(--app-gutter) 56px; }
+.app {
+  flex: 1; max-width: var(--maxw); width: 100%; margin: 0 auto;
+  padding: 20px var(--app-gutter) 56px;
+  /* 轉成橫式時瀏海那側要多留一點 */
+  padding-left: max(var(--app-gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--app-gutter), env(safe-area-inset-right, 0px));
+}
 
 .footer {
   border-top: 1px solid var(--border);
   background: var(--bg-elev);
-  padding: 18px 14px 22px; text-align: center;
+  /* iPhone 底部那條橫線（home indicator）不要蓋到字 */
+  padding: 18px 14px calc(22px + env(safe-area-inset-bottom, 0px)); text-align: center;
   color: var(--text-dim); line-height: 1.9;
 }
 /* 字級跟著視窗縮放；單位名稱本身不斷行，整行放不下時才整段換行 */
@@ -189,28 +215,43 @@ p { margin: 0 0 .8em; }
   padding: 9px 15px; font-size: .78rem; color: var(--text-dim);
   border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
 }
-.map-stage { position: relative; line-height: 0; }
+/* 地圖：載入後 JS 會把真實比例寫進 --map-ar，先用它占好位子，
+   圖片晚一點到也不會把下面的攤位卡往下推。
+   --pin-scale 讓標記跟著地圖一起縮，地圖變小時標記才不會互相疊在一起。 */
+.map-stage {
+  position: relative; line-height: 0;
+  --map-ar: 1.6;
+  --pin-scale: 1;
+  aspect-ratio: var(--map-ar);
+  margin-inline: auto;
+}
+.map-stage > img { width: 100%; height: 100%; object-fit: contain; display: block; }
 /* 標記層不吃點擊，空白處的點擊才傳得到底下的地圖（放大檢視） */
 .pin-layer { position: absolute; inset: 0; pointer-events: none; }
 .pin-layer .pin { pointer-events: auto; }
 
 /* ---------- 地圖上的攤位標記 ---------- */
+/* --nx / --ny：標記太擠的時候 JS 會把它們稍微撥開一點，才不會互相蓋住 */
 .pin {
-  position: absolute; transform: translate(-50%, -50%);
+  position: absolute;
+  transform: translate(-50%, -50%) translate(var(--nx, 0px), var(--ny, 0px));
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   text-decoration: none; line-height: 1.2; z-index: 1;
 }
 .pin:hover { text-decoration: none; z-index: 3; }
 .pin-dot {
-  min-width: 26px; height: 26px; padding: 0 7px; border-radius: 99px;
-  background: var(--brand); color: #fff; border: 2px solid var(--bg-elev);
-  font-size: .74rem; font-weight: 800; font-variant-numeric: tabular-nums;
+  --pin-size: calc(26px * var(--pin-scale, 1));
+  min-width: var(--pin-size); height: var(--pin-size);
+  padding: 0 calc(7px * var(--pin-scale, 1)); border-radius: 99px;
+  background: var(--brand); color: #fff;
+  border: max(1.5px, calc(2px * var(--pin-scale, 1))) solid var(--bg-elev);
+  font-size: calc(.74rem * var(--pin-scale, 1)); font-weight: 800; font-variant-numeric: tabular-nums;
   display: grid; place-items: center;
   box-shadow: 0 2px 7px rgba(58, 42, 30, .4);
   transition: transform .18s ease, background .18s ease;
 }
 .pin-name {
-  max-width: 130px; padding: 2px 8px; border-radius: 6px;
+  max-width: min(130px, 34vw); padding: 2px 8px; border-radius: 6px;
   background: color-mix(in srgb, var(--text) 90%, transparent); color: var(--bg-elev);
   font-size: .68rem; font-weight: 700; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
@@ -267,7 +308,9 @@ p { margin: 0 0 .8em; }
 /* ---------- 放大檢視 ---------- */
 .img-viewer {
   position: fixed; inset: 0; z-index: 180; background: rgba(20, 12, 6, .93);
-  display: grid; place-items: center; padding: 20px;
+  display: grid; place-items: center;
+  padding: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px))
+           max(20px, env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
 }
 .img-viewer img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
 .img-viewer-close {
@@ -328,8 +371,9 @@ p { margin: 0 0 .8em; }
 .slide { position: absolute; inset: 0; opacity: 0; transition: opacity .5s ease; }
 .slide.active { opacity: 1; }
 .slide img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-/* 底層：模糊放大的同一張照片，直式照片才不會兩側空一大片黑 */
-.slide .slide-bg { object-fit: cover; filter: blur(30px) brightness(.5); transform: scale(1.15); }
+/* 底層：模糊放大的同一張照片，直式照片才不會兩側空一大片黑。
+   來源用 64px 的小圖，模糊半徑也壓小，手機 GPU 才不會為了這層一直掉幀。 */
+.slide .slide-bg { object-fit: cover; filter: blur(12px) brightness(.5); transform: scale(1.18); }
 .slide .slide-img { object-fit: contain; }
 .slide-dots { position: absolute; bottom: 12px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; }
 .slide-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.5); display: block; }
@@ -356,9 +400,20 @@ p { margin: 0 0 .8em; }
 .field > label { display: block; font-size: .85rem; font-weight: 800; margin-bottom: 6px; }
 .field .hint { font-size: .78rem; color: var(--text-faint); margin: 6px 0 0; }
 
+/* 手機（觸控裝置）上輸入框的字一定要 ≥16px。
+   小於 16px 的話，iOS Safari 一點進去就會自動把整頁放大，而且不會縮回來。 */
+@media (pointer: coarse) {
+  input[type="text"], input[type="tel"], input[type="password"],
+  input[type="number"], input[type="time"], input[type="search"],
+  textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 input[type="text"], input[type="tel"], input[type="password"],
 input[type="number"], input[type="time"], textarea, select {
   width: 100%; padding: 10px 12px; font: inherit; font-size: .93rem;
+  max-width: 100%;
   color: var(--text); background: var(--bg-elev);
   border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
   outline: none; transition: border-color .12s, box-shadow .12s;
@@ -520,7 +575,8 @@ td.num { font-variant-numeric: tabular-nums; }
 
 /* ---------- Toast ---------- */
 .toast-host {
-  position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px;
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   z-index: 200; display: flex; flex-direction: column; gap: 9px; align-items: center;
   pointer-events: none; width: calc(100% - 32px); max-width: 440px;
 }
@@ -535,7 +591,13 @@ td.num { font-variant-numeric: tabular-nums; }
 
 /* ---------- Modal ---------- */
 .modal-host { position: fixed; inset: 0; z-index: 150; background: rgba(35, 22, 14, .55); display: grid; place-items: center; padding: 18px; backdrop-filter: blur(3px); }
-.modal { background: var(--bg-elev); border-radius: var(--radius); padding: 24px; width: 100%; max-width: 460px; box-shadow: var(--shadow); border: 1px solid var(--border); max-height: 90vh; overflow-y: auto; }
+.modal {
+  background: var(--bg-elev); border-radius: var(--radius); padding: 24px;
+  width: 100%; max-width: 460px; box-shadow: var(--shadow); border: 1px solid var(--border);
+  /* dvh：手機鍵盤跳出來時視窗會變矮，用 vh 的話按鈕會被擠到看不到 */
+  max-height: 90vh; max-height: 90dvh;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
 .modal h3 { margin-top: 0; }
 .modal .btn-row { justify-content: flex-end; margin-top: 20px; }
 
@@ -610,26 +672,61 @@ td.num { font-variant-numeric: tabular-nums; }
   .hero { margin-top: 12px; }
   .map-card { margin-bottom: 14px; }
   .map-card .map-cap { padding: 7px 13px; font-size: .74rem; }
-  .booth-thumb { aspect-ratio: 16 / 9; }
+  .booth-thumb { aspect-ratio: 16 / 10; }
   .booth-body { padding: 12px 14px 13px; gap: 7px; }
   .booth-body h3 { font-size: 1rem; }
   .booth-desc { font-size: .84rem; }
   .booth-foot { gap: 6px; }
   .tag { font-size: .71rem; padding: 2px 9px; }
   .rail-island { bottom: 14px; padding: 7px 16px; font-size: .82rem; }
-}
 
-/* 螢幕比較矮的手機：地圖整體縮小一點（等比例縮，標記位置不會跑掉），
-   照片也壓扁一些，讓地圖和攤位卡還是能同時看到 */
-@media (max-width: 720px) and (max-height: 720px) {
-  .map-stage { max-width: 84%; margin: 0 auto; }
-  .booth-thumb { aspect-ratio: 2 / 1; }
-  .hero { margin-top: 10px; }
-  .app { padding-top: 12px; }
+  /* 地圖最多占畫面高度的四成，剩下的留給攤位卡，地圖和攤位可以同時看到。
+     用 svh（網址列收起來也不會變的高度）而不是媒體查詢的視窗高度，
+     捲動時版面才不會忽大忽小；也不用再為了矮螢幕另外寫一組規則。
+     寬度由圖片比例自己算出來，所以標記位置永遠對得上。 */
+  .map-stage {
+    --map-h: clamp(150px, 40svh, 300px);
+    max-height: var(--map-h);
+    width: min(100%, calc(var(--map-h) * var(--map-ar)));
+  }
+  .slideshow-track { height: clamp(200px, 52vw, 320px); }
 }
 
 /* 真的很矮的螢幕（例如 iPhone SE）：簡介收成一行 */
 @media (max-width: 720px) and (max-height: 620px) {
-  .map-stage { max-width: 74%; }
   .booth-desc { -webkit-line-clamp: 1; line-clamp: 1; }
+}
+
+/* ---------- 手機上的省電模式 ----------
+   backdrop-filter（毛玻璃）在手機瀏覽器上很貴：頂列是 sticky 的，
+   每捲動一幀都要把底下的畫面重新模糊一次，這是捲動卡頓最大的來源。
+   手機改用不透明底色，看起來幾乎一樣，但順很多。 */
+@media (max-width: 720px) {
+  /* 總召定位地圖：手機上同時顯示所有攤位名稱會整片疊在一起，
+     只顯示目前選到的那一個 */
+  .map-edit-stage .pin-name { display: none; }
+  .map-edit-stage .pin.is-active .pin-name { display: block; opacity: 1; transform: none; }
+
+  .topbar { background: var(--bg-elev); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .modal-host { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(35, 22, 14, .68); }
+  .rail-island { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--text); }
+  .booth-thumb .count-badge { backdrop-filter: none; }
+}
+
+/* 沒有滑鼠的裝置：把 hover 效果關掉。
+   iOS 上點一下之後 :hover 會黏住不退，看起來就像按鈕壞了。 */
+@media (hover: none) {
+  .booth-card:hover { transform: none; box-shadow: var(--shadow-sm); border-color: var(--border); }
+  .btn:hover { filter: none; }
+  .btn-ghost:hover { background: var(--bg-elev); }
+  .btn-danger-ghost:hover { background: transparent; }
+  .nav a:hover:not(.active) { background: transparent; color: var(--text-dim); }
+  .pin:hover .pin-dot { transform: none; }
+  .pin:hover .pin-name { opacity: 0; }
+  .pin.is-active .pin-dot { transform: scale(1.3); }
+  .pin.is-active .pin-name { opacity: 1; transform: translateY(0); }
+  .place-row:hover { border-color: var(--border); }
+  .dropzone:hover { border-color: var(--border-strong); background: transparent; color: var(--text-dim); }
+  tbody tr:hover { background: transparent; }
+  .logout-btn:hover { background: var(--bg-elev); }
 }
