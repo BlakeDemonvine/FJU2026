@@ -801,18 +801,26 @@ td.num { font-variant-numeric: tabular-nums; }
   #boothList > .booth-grid { flex: 1 1 auto; align-items: stretch; }
   #boothList > .loading, #boothList > .empty, #boothList > .notice { margin: auto; }
 
-  /* 卡片下半部（編號、名稱、簡介、標籤）高度固定，照片吸收剩下的空間。
-     螢幕高的手機照片就大一點，螢幕矮的就小一點。 */
-  .booth-thumb { aspect-ratio: auto; flex: 1 1 0; min-height: 70px; }
-  .booth-body { flex: 0 0 auto; }
-  /* 標題一律占兩行的高度（只有一行時上下置中），
-     這樣每張卡的下半部一樣高，左右滑的時候照片不會忽大忽小 */
-  .booth-body h3 {
-    min-height: 2.5em; display: flex; align-items: center; line-height: 1.25;
-  }
+  /* 照片用固定比例，剩下的高度全部留給簡介 —— 螢幕越高，介紹就看得越多。
+     空間真的不夠時照片會先被壓縮（flex-shrink），不會把文字擠掉。 */
+  .booth-thumb { aspect-ratio: 16 / 10; flex: 0 1 auto; min-height: 84px; }
+  .booth-body { flex: 1 1 auto; min-height: 0; }
+  /* 標題不再硬撐兩行的高度：一行的攤位名稱下面就不會空一大塊 */
+  .booth-body h3 { min-height: 0; line-height: 1.3; }
   .booth-body h3 > span {
     display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
     -webkit-box-orient: vertical; overflow: hidden;
+  }
+  /* 簡介吃掉卡片剩下的高度，能顯示幾行就顯示幾行 */
+  .booth-desc {
+    flex: 1 1 auto; min-height: 0;
+    display: block; -webkit-line-clamp: none; line-clamp: none;
+    overflow: hidden;
+  }
+  /* 文字真的被截斷時，底部做一點淡出，讓人知道下面還有（JS 量出來才加這個 class） */
+  .booth-desc.is-clipped {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent 100%);
   }
 
   /* 浮動島改成排在攤位卡正下方，不再蓋住卡片上的字 */
