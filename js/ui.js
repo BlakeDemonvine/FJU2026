@@ -522,6 +522,18 @@ window.UI = (function () {
     document.addEventListener('keydown', onKey);
   }
 
+  /* ---------- 攤位編號的「地圖群組」 ----------
+   * 同一個攤位切成好幾攤的時候（A1-1、A1-2），在系統裡是各自獨立的攤位，
+   * 有各自的代碼和報名名單；但在地圖上它們是同一個位置，而且只寫 A1。
+   * 這個函式就是把編號前面那一段取出來當群組名。
+   */
+  function boothGroup(no) {
+    var s = String(no === null || no === undefined ? '' : no).trim();
+    var i = s.search(/[-－‐–—_/／]/);
+    var g = (i > 0 ? s.slice(0, i) : s).trim();
+    return g || s;
+  }
+
   /* ---------- 攤位編號自然排序：1 < 2 < 10，A01 < B01 ---------- */
 
   function chunkNo(s) {
@@ -555,7 +567,7 @@ window.UI = (function () {
     slideshowHTML: slideshowHTML, initSlideshows: initSlideshows, stopSlideshows: stopSlideshows,
     store: store, compressImage: compressImage, growthEmoji: growthEmoji,
     formatPhone: formatPhone, downloadCSV: downloadCSV, busy: busy,
-    viewImage: viewImage, compareBoothNo: compareBoothNo,
+    viewImage: viewImage, compareBoothNo: compareBoothNo, boothGroup: boothGroup,
     isTouch: isTouch, lockScroll: lockScroll,
     photoSrc: photoSrc, photoAltSrc: photoAltSrc, imgTag: imgTag,
     hydrateImg: hydrateImg, bindImgFallback: bindImgFallback,
