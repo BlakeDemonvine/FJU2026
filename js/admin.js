@@ -130,7 +130,8 @@ window.AdminView = (function () {
           '<span class="small muted" id="placeCount"></span></div>' +
         '<p class="muted small" style="margin-top:-6px">' +
           '先點右邊的攤位，再點地圖上的位置就定位好了；已經放上去的標記可以直接拖曳微調。' +
-          '玩家的首頁會看到這些標記。</p>' +
+          '玩家的首頁會看到這些標記。<br>' +
+          '編號用「-」分段的攤位（A1-1、A1-2）在地圖上算同一攤，一起定位、標記上只寫 A1。</p>' +
         (booths.length
           ? '<div class="map-editor">' +
               '<div class="map-edit-stage" id="editStage">' +
@@ -171,30 +172,56 @@ window.AdminView = (function () {
 
     function placed(b) { return typeof b.mapX === 'number' && typeof b.mapY === 'number'; }
 
-    function draw() {
-      var done = booths.filter(placed).length;
-      document.getElementById('placeCount').textContent = '已定位 ' + done + ' / ' + booths.length;
+    /* 以「地圖群組」為單位來定位：A1-1 與 A1-2 共用一個標記、一起存。 */
+    function buildGroups() {
+      var order = [], map = {};
+      booths.forEach(function (b) {
+        var key = UI.boothGroup(b.boothNo);
+        if (!map[key]) { map[key] = { key: key, booths: [] }; order.push(key); }
+        map[key].booths.push(b);
+      });
+      return order.map(function (k) {
+        var g = map[k];
+        var anchor = g.booths.filter(placed)[0];
+        g.mapX = anchor ? anchor.mapX : null;
+        g.mapY = anchor ? anchor.mapY : null;
+        g.label = g.booths.length > 1
+          ? g.booths[0].name + '　等 ' + g.booths.length + ' 攤'
+          : g.booths[0].name;
+        return g;
+      });
+    }
 
-      pinLayer.innerHTML = booths.filter(placed).map(function (b) {
-        return '<div class="pin' + (b.boothId === selected ? ' is-active' : '') + '" ' +
-          'data-pin="' + esc(b.boothId) + '" style="left:' + b.mapX + '%;top:' + b.mapY + '%">' +
-          '<span class="pin-dot">' + esc(b.boothNo) + '</span>' +
-          '<span class="pin-name">' + esc(b.name) + '</span>' +
+    var groups = buildGroups();
+    function byKey(k) {
+      return groups.filter(function (g) { return g.key === k; })[0];
+    }
+
+    function draw() {
+      groups = buildGroups();
+      var done = groups.filter(function (g) { return g.mapX !== null; }).length;
+      document.getElementById('placeCount').textContent = '已定位 ' + done + ' / ' + groups.length;
+
+      pinLayer.innerHTML = groups.filter(function (g) { return g.mapX !== null; }).map(function (g) {
+        return '<div class="pin' + (g.key === selected ? ' is-active' : '') + '" ' +
+          'data-pin="' + esc(g.key) + '" style="left:' + g.mapX + '%;top:' + g.mapY + '%">' +
+          '<span class="pin-dot">' + esc(g.key) + '</span>' +
+          '<span class="pin-name">' + esc(g.label) + '</span>' +
         '</div>';
       }).join('');
 
-      list.innerHTML = booths.map(function (b) {
-        var ok = placed(b);
-        return '<button type="button" class="place-row' + (b.boothId === selected ? ' is-selected' : '') +
-          '" data-row="' + esc(b.boothId) + '">' +
-          '<span class="pno">' + esc(b.boothNo) + '</span>' +
-          '<span class="pname">' + esc(b.name) + '</span>' +
+      list.innerHTML = groups.map(function (g) {
+        var ok = g.mapX !== null;
+        return '<button type="button" class="place-row' + (g.key === selected ? ' is-selected' : '') +
+          '" data-row="' + esc(g.key) + '">' +
+          '<span class="pno">' + esc(g.key) + '</span>' +
+          '<span class="pname">' + esc(g.label) + '</span>' +
           '<span class="pstate ' + (ok ? 'done' : 'todo') + '">' + (ok ? '已定位' : '未定位') + '</span>' +
         '</button>';
       }).join('');
 
       stage.classList.toggle('placing', !!selected);
-      clearBtn.disabled = !selected || !placed(byId(selected));
+      clearBtn.disabled = !selected || !byKey(selected) || byKey(selected).mapX === null;
 
       UI.$$('[data-row]', list).forEach(function (row) {
         row.onclick = function () {
@@ -205,18 +232,21 @@ window.AdminView = (function () {
       bindDrag();
     }
 
-    function byId(id) {
-      return booths.filter(function (b) { return b.boothId === id; })[0];
-    }
-
-    function save(booth, x, y) {
-      var prevX = booth.mapX, prevY = booth.mapY;
-      booth.mapX = x; booth.mapY = y;
+    /** 整個群組的攤位一起寫入同一個座標 */
+    function save(group, x, y) {
+      if (!group) return;
+      var prev = group.booths.map(function (b) { return { b: b, x: b.mapX, y: b.mapY }; });
+      group.booths.forEach(function (b) { b.mapX = x; b.mapY = y; });
       draw();
-      API.adminSetBoothPos({ adminCode: state.code, boothId: booth.boothId, mapX: x, mapY: y })
-        .then(function (res) { UI.ok(res.message); })
+
+      Promise.all(group.booths.map(function (b) {
+        return API.adminSetBoothPos({ adminCode: state.code, boothId: b.boothId, mapX: x, mapY: y });
+      }))
+        .then(function () {
+          UI.ok(x === null ? '已清除 ' + group.key + ' 的位置' : group.key + ' 的位置已更新');
+        })
         .catch(function (e) {
-          booth.mapX = prevX; booth.mapY = prevY;   // 存不進去就還原
+          prev.forEach(function (p) { p.b.mapX = p.x; p.b.mapY = p.y; });   // 存不進去就還原
           draw();
           UI.err(e.message);
         });
@@ -234,7 +264,7 @@ window.AdminView = (function () {
     stage.onclick = function (ev) {
       if (!selected || ev.target.closest('.pin')) return;
       var c = coords(ev);
-      save(byId(selected), c.x, c.y);
+      save(byKey(selected), c.x, c.y);
     };
 
     // 拖曳既有的標記微調位置
@@ -242,9 +272,9 @@ window.AdminView = (function () {
       UI.$$('.pin', pinLayer).forEach(function (pin) {
         pin.onpointerdown = function (ev) {
           ev.preventDefault();
-          var booth = byId(pin.dataset.pin);
-          if (!booth) return;
-          selected = booth.boothId;
+          var group = byKey(pin.dataset.pin);
+          if (!group) return;
+          selected = group.key;
           pin.classList.add('dragging');
           pin.setPointerCapture(ev.pointerId);
           var moved = false;
@@ -260,7 +290,7 @@ window.AdminView = (function () {
             pin.onpointerup = null;
             pin.classList.remove('dragging');
             var c = coords(e2);
-            if (moved) save(booth, c.x, c.y);
+            if (moved) save(group, c.x, c.y);
             else draw();
           };
         };
@@ -268,18 +298,7 @@ window.AdminView = (function () {
     }
 
     clearBtn.onclick = function () {
-      if (!selected) return;
-      var booth = byId(selected);
-      var prevX = booth.mapX, prevY = booth.mapY;
-      booth.mapX = null; booth.mapY = null;
-      draw();
-      API.adminSetBoothPos({ adminCode: state.code, boothId: booth.boothId, mapX: null, mapY: null })
-        .then(function (res) { UI.ok(res.message); })
-        .catch(function (e) {
-          booth.mapX = prevX; booth.mapY = prevY;
-          draw();
-          UI.err(e.message);
-        });
+      if (selected) save(byKey(selected), null, null);
     };
 
     draw();
@@ -308,7 +327,7 @@ window.AdminView = (function () {
           '</div></div>' +
         (d.booths.length
           ? '<div class="table-wrap"><table><thead><tr>' +
-              '<th>編號</th><th>代碼</th><th>攤位名稱</th><th>狀態</th>' +
+              '<th>編號</th><th>代碼</th><th>攤位名稱</th><th>類型</th><th>狀態</th>' +
               '<th>報名 / 名額</th><th>時段</th><th>名單</th><th>操作</th>' +
             '</tr></thead><tbody>' + d.booths.map(boothRow).join('') + '</tbody></table></div>'
           : UI.emptyHTML('🎪', '還沒有任何攤位', '先在上面填攤位編號產生一組代碼給攤商')) +
@@ -345,10 +364,12 @@ window.AdminView = (function () {
     };
 
     document.getElementById('expBooths').onclick = function () {
-      var rows = [['攤位編號', '代碼', '攤位名稱', '狀態', '已報名', '總名額', '時段數', '建立時間']];
+      var rows = [['攤位編號', '代碼', '攤位名稱', '類型', '狀態', '已報名', '總名額', '時段數', '建立時間']];
       d.booths.forEach(function (b) {
-        rows.push([b.boothNo, b.code, b.name, b.closed ? '停止報名' : (b.configured ? '開放中' : '未設定'),
-                   b.taken, b.capacity, b.slots.length, b.createdAt]);
+        rows.push([b.boothNo, b.code, b.name, b.infoOnly ? '只做介紹' : '需要報名',
+                   b.infoOnly ? '自由參觀' : (b.closed ? '停止報名' : (b.configured ? '開放中' : '未設定')),
+                   b.infoOnly ? '' : b.taken, b.infoOnly ? '' : b.capacity,
+                   b.infoOnly ? '' : b.slots.length, b.createdAt]);
       });
       UI.downloadCSV('攤位清單.csv', rows);
     };
@@ -391,6 +412,20 @@ window.AdminView = (function () {
       };
     });
 
+    UI.$$('[data-mode]', body).forEach(function (box) {
+      box.onchange = function () {
+        var infoOnly = !box.checked;          // 開關關起來 = 只做介紹
+        box.disabled = true;
+        API.adminSetBoothMode({ adminCode: state.code, boothId: box.dataset.mode, infoOnly: infoOnly })
+          .then(function (res) { UI.ok(res.message); load(app); })
+          .catch(function (e) {
+            box.checked = !box.checked;       // 存不進去就還原
+            box.disabled = false;
+            UI.err(e.message);
+          });
+      };
+    });
+
     UI.$$('[data-slots]', body).forEach(function (btn) {
       btn.onclick = function () {
         var b = d.booths.filter(function (x) { return x.boothId === btn.dataset.slots; })[0];
@@ -412,9 +447,15 @@ window.AdminView = (function () {
   }
 
   function boothRow(b) {
-    var status = !b.configured ? '<span class="tag tag-muted">未設定</span>'
+    var status = b.infoOnly ? '<span class="tag tag-brand">自由參觀</span>'
+      : !b.configured ? '<span class="tag tag-muted">未設定</span>'
       : b.closed ? '<span class="tag tag-danger">停止報名</span>'
       : '<span class="tag tag-ok">開放中</span>';
+
+    // 需要報名 ↔ 只做介紹，由總召切換
+    var mode = '<label class="switch" title="關掉代表這個攤位只做介紹，不開放報名">' +
+      '<input type="checkbox" data-mode="' + esc(b.boothId) + '"' + (b.infoOnly ? '' : ' checked') + '>' +
+      '<span class="small">' + (b.infoOnly ? '只做介紹' : '需要報名') + '</span></label>';
 
     return '<tr>' +
       '<td><span class="booth-no">' + esc(b.boothNo || '—') + '</span> ' +
@@ -425,11 +466,13 @@ window.AdminView = (function () {
       '<td>' + (b.configured
         ? '<a href="#/booth/' + esc(b.boothId) + '">' + esc(b.name) + '</a>'
         : '<span class="muted">—</span>') + '</td>' +
+      '<td>' + mode + '</td>' +
       '<td>' + status + '</td>' +
-      '<td class="num">' + b.taken + ' / ' + b.capacity + '</td>' +
-      '<td class="num"><button class="btn btn-ghost btn-sm" data-slots="' + esc(b.boothId) + '">' + b.slots.length + ' 個</button></td>' +
+      '<td class="num">' + (b.infoOnly ? '<span class="muted">—</span>' : b.taken + ' / ' + b.capacity) + '</td>' +
+      '<td class="num">' + (b.infoOnly ? '<span class="muted">—</span>'
+        : '<button class="btn btn-ghost btn-sm" data-slots="' + esc(b.boothId) + '">' + b.slots.length + ' 個</button>') + '</td>' +
       '<td>' + (b.fileUrl
-        ? '<a class="btn btn-ghost btn-sm" href="' + esc(b.fileUrl) + '" target="_blank" rel="noopener">開啟試算表</a>'
+        ? '<a class="btn btn-ghost btn-sm" href="' + esc(b.fileUrl) + '" target="_blank" rel="noopener">試算表</a>'
         : '<span class="tag tag-warn">缺檔案</span>') + '</td>' +
       '<td>' +
         '<button class="btn btn-ghost btn-sm" data-reset="' + esc(b.boothId) + '">換代碼</button> ' +
@@ -506,7 +549,7 @@ window.AdminView = (function () {
   function paintSignups(app) {
     var d = state.data;
     var body = document.getElementById('aBody');
-    var live = d.booths.filter(function (b) { return b.configured; });
+    var live = d.booths.filter(function (b) { return b.configured && !b.infoOnly; });
 
     body.innerHTML =
       '<div class="btn-row mb">' +
