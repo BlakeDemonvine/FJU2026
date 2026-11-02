@@ -14,6 +14,63 @@ window.PlayerView = (function () {
     document.documentElement.style.setProperty('--topbar-h', h + 'px');
   }
 
+  /* 捲動定位的保險。
+     CSS 的 scroll-snap 在各家手機瀏覽器上支援程度不一（Safari 尤其挑），
+     所以這裡再加一層：手指放開、捲動停下來之後，如果位置停在半路，
+     就用 JS 輕輕滑到最近的定位點。瀏覽器自己已經對好的話這段什麼都不會做。 */
+  function initSnapAssist() {
+    if (window.__snapBound) return;
+    window.__snapBound = true;
+
+    var touching = false;
+    var timer = null;
+
+    function onHome() {
+      return document.documentElement.classList.contains('snap-home') &&
+             window.matchMedia('(max-width: 720px)').matches;
+    }
+
+    /** 可以停的位置：主視覺頂端、「地圖＋攤位」那一塊的頂端、頁面最底 */
+    function stops() {
+      var fit = document.getElementById('homeFit');
+      if (!fit || !document.body.contains(fit)) return null;
+      var barH = parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 52;
+      var hero = document.getElementById('hero');
+      var max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      var list = [];
+      if (hero && !hero.hidden) list.push(Math.max(0, hero.offsetTop - barH));
+      list.push(Math.min(max, Math.max(0, fit.offsetTop - barH)));
+      list.push(max);
+      return list;
+    }
+
+    function settle() {
+      if (touching || !onHome()) return;
+      if (document.body.style.position === 'fixed') return;   // 正開著彈出視窗
+      var list = stops();
+      if (!list || list.length < 2) return;
+
+      var y = window.pageYOffset || document.documentElement.scrollTop || 0;
+      var best = list[0];
+      list.forEach(function (t) { if (Math.abs(t - y) < Math.abs(best - y)) best = t; });
+      if (Math.abs(best - y) < 3) return;      // 瀏覽器自己已經對好了
+
+      try { window.scrollTo({ top: best, behavior: 'smooth' }); }
+      catch (e) { window.scrollTo(0, best); }
+    }
+
+    function bump() {
+      clearTimeout(timer);
+      timer = setTimeout(settle, 220);
+    }
+
+    window.addEventListener('touchstart', function () { touching = true; }, { passive: true });
+    window.addEventListener('touchend', function () { touching = false; bump(); }, { passive: true });
+    window.addEventListener('touchcancel', function () { touching = false; bump(); }, { passive: true });
+    window.addEventListener('scroll', bump, { passive: true });
+  }
+
   if (!window.__chromeBound) {
     window.__chromeBound = true;
     window.addEventListener('resize', measureChrome);
@@ -48,6 +105,7 @@ window.PlayerView = (function () {
     var homeFit = document.getElementById('homeFit');
 
     measureChrome();
+    initSnapAssist();
 
     // 還沒放 map.png 的話就不要留一個破圖，也不用硬撐成一個畫面高
     mapImg.onerror = function () {
@@ -81,12 +139,11 @@ window.PlayerView = (function () {
       window.addEventListener('resize', sizePins);
     }
 
-    /** 把有定位的攤位畫到地圖上 */
+    /** 把有定位的攤位畫到地圖上。
+     *  同一個位置可能有好幾攤（A1-1、A1-2），地圖上只畫一個標記、只寫 A1。 */
     function paintPins(list) {
       var layer = document.getElementById('pinLayer');
-      var placed = list.filter(function (b) {
-        return typeof b.mapX === 'number' && typeof b.mapY === 'number';
-      });
+      var placed = groupForMap(list);
 
       mapImg.style.cursor = 'zoom-in';
       mapImg.onclick = function () { UI.viewImage(mapImg.src); };
@@ -102,18 +159,47 @@ window.PlayerView = (function () {
         window.matchMedia('(max-width: 520px)').matches
           ? '點標記前往攤位' : '點標記前往攤位，點空白處放大地圖';
       renderHome.__spread = spreadPins;
-      layer.innerHTML = placed.map(function (b) {
-        return '<a class="pin' + (b.allClosed ? ' is-closed' : '') + '" ' +
-          'href="#/booth/' + esc(b.boothId) + '" ' +
-          'data-pin="' + esc(b.boothId) + '" ' +
-          'style="left:' + b.mapX + '%;top:' + b.mapY + '%" ' +
-          'title="' + esc(b.boothNo + ' ' + b.name) + '">' +
-          '<span class="pin-dot">' + esc(b.boothNo) + '</span>' +
-          '<span class="pin-name">' + esc(b.name) + '</span>' +
+      layer.innerHTML = placed.map(function (g) {
+        return '<a class="pin' + (g.allClosed ? ' is-closed' : '') + '" ' +
+          'href="#/booth/' + esc(g.boothId) + '" ' +
+          'data-pin="' + esc(g.key) + '" ' +
+          'style="left:' + g.mapX + '%;top:' + g.mapY + '%" ' +
+          'title="' + esc(g.key + ' ' + g.label) + '">' +
+          '<span class="pin-dot">' + esc(g.key) + '</span>' +
+          '<span class="pin-name">' + esc(g.label) + '</span>' +
         '</a>';
       }).join('');
 
       spreadPins();
+    }
+
+    /**
+     * 把攤位依「地圖群組」合併：A1-1 與 A1-2 算同一攤，標記上只寫 A1。
+     * 位置取該群組裡第一個有定位的攤位；點下去會進到該群組的第一個攤位。
+     */
+    function groupForMap(list) {
+      var order = [], map = {};
+      list.forEach(function (b) {
+        if (typeof b.mapX !== 'number' || typeof b.mapY !== 'number') return;
+        var key = UI.boothGroup(b.boothNo);
+        if (!map[key]) {
+          map[key] = {
+            key: key, boothId: b.boothId,
+            mapX: b.mapX, mapY: b.mapY,
+            names: [], allClosed: true
+          };
+          order.push(key);
+        }
+        map[key].names.push(b.name);
+        if (!b.allClosed) map[key].allClosed = false;
+      });
+      return order.map(function (k) {
+        var g = map[k];
+        g.label = g.names.length > 1
+          ? g.names[0] + '　等 ' + g.names.length + " 攤"
+          : g.names[0];
+        return g;
+      });
     }
 
     /* 位置很接近的攤位（例如 A1 跟 A5 只差幾公尺），在手機的小地圖上
@@ -169,10 +255,12 @@ window.PlayerView = (function () {
       });
     }
 
-    /** highlight 某個攤位的標記（滑到那張卡、或滑鼠移過卡片時） */
-    function focusPin(boothId) {
+    /** highlight 某個攤位的標記（滑到那張卡、或滑鼠移過卡片時）。
+     *  標記是用群組畫的，所以要比對群組名 —— 滑到 A1-2 也會亮 A1。 */
+    function focusPin(boothNo) {
+      var key = boothNo ? UI.boothGroup(boothNo) : null;
       UI.$$('#pinLayer .pin').forEach(function (p) {
-        p.classList.toggle('is-active', p.dataset.pin === boothId);
+        p.classList.toggle('is-active', !!key && p.dataset.pin === key);
       });
     }
 
@@ -231,7 +319,7 @@ window.PlayerView = (function () {
       // 寬螢幕：滑鼠移到攤位卡上，地圖對應的標記會亮起來
       if (!UI.isTouch) {
         UI.$$('.booth-card', box).forEach(function (card, i) {
-          card.addEventListener('mouseenter', function () { focusPin(list[i].boothId); });
+          card.addEventListener('mouseenter', function () { focusPin(list[i].boothNo); });
           card.addEventListener('mouseleave', function () { focusPin(null); });
         });
       }
@@ -239,7 +327,16 @@ window.PlayerView = (function () {
       var rail = document.getElementById('boothRail');
       if (rail && keepScroll) rail.scrollLeft = keepScroll;
       initRail(rail, island, list);
+      markClipped();
     }
+
+    /** 簡介被截斷的那幾張卡才加淡出效果，剛好放得下的就不要加 */
+    function markClipped() {
+      UI.$$('.booth-desc').forEach(function (el) {
+        el.classList.toggle('is-clipped', el.scrollHeight > el.clientHeight + 2);
+      });
+    }
+    renderHome.__markClipped = markClipped;
 
     /** 窄螢幕時攤位是左右滑的，底部浮動島顯示現在看到第幾個 */
     function initRail(rail, island, list) {
@@ -270,7 +367,7 @@ window.PlayerView = (function () {
           '<span>' + (best + 1) + ' / ' + list.length + '</span>';
 
         // 滑到哪一攤，地圖上就亮哪一攤
-        focusPin(cur.boothId);
+        focusPin(cur.boothNo);
       }
 
       rail.addEventListener('scroll', function () {
@@ -290,6 +387,7 @@ window.PlayerView = (function () {
         renderHome.__winBound = true;
         window.addEventListener('resize', function () {
           if (renderHome.__update) renderHome.__update();
+          if (renderHome.__markClipped) renderHome.__markClipped();
         });
       }
       renderHome.__update = update;
@@ -311,20 +409,24 @@ window.PlayerView = (function () {
         ? b.photoCount : (b.photos || []).length;
       var badge = photoCount > 1 ? '<span class="count-badge">📷 ' + photoCount + '</span>' : '';
 
-      var status = b.allClosed
-        ? '<span class="tag tag-danger">已截止報名</span>'
-        : '<span class="tag tag-ok">尚餘 ' + b.totalRemaining + ' 個名額</span>';
-
       var dur = UI.formatDuration(b.duration);
 
-      return '<a class="booth-card' + (b.allClosed ? ' is-closed' : '') + '" href="#/booth/' + esc(b.boothId) + '">' +
+      /* 介紹攤位不用報名，所以不顯示名額與時段，改標示「自由參觀」 */
+      var tags = b.infoOnly
+        ? '<span class="tag tag-brand">🎪 自由參觀</span>'
+        : (b.allClosed
+            ? '<span class="tag tag-danger">已截止報名</span>'
+            : '<span class="tag tag-ok">尚餘 ' + b.totalRemaining + ' 個名額</span>') +
+          '<span class="tag tag-muted">' + b.slotCount + ' 個時段</span>';
+
+      return '<a class="booth-card' + (!b.infoOnly && b.allClosed ? ' is-closed' : '') +
+             '" href="#/booth/' + esc(b.boothId) + '">' +
         '<div class="booth-thumb">' + thumb + badge + '</div>' +
         '<div class="booth-body">' +
           (b.boothNo ? '<span class="booth-no">攤位：' + esc(b.boothNo) + '</span>' : '') +
           '<h3><span>' + esc(b.name) + '</span></h3>' +
           '<p class="booth-desc">' + esc(b.description || '這個攤位還沒有填寫簡介') + '</p>' +
-          '<div class="booth-foot">' + status +
-            '<span class="tag tag-muted">' + b.slotCount + ' 個時段</span>' +
+          '<div class="booth-foot">' + tags +
             (dur ? '<span class="tag tag-amber">⏱ ' + esc(dur) + '</span>' : '') +
           '</div>' +
         '</div>' +
@@ -398,15 +500,19 @@ window.PlayerView = (function () {
         (b.description
           ? '<div class="card mt"><h2>攤位簡介</h2><p style="margin:0">' + UI.nl2br(b.description) + '</p></div>'
           : '') +
-        '<div class="card mt">' +
-          '<div class="card-title"><h2>選擇報名時段</h2>' +
-            '<a class="small muted" href="#/mine">查詢／取消我的報名 →</a></div>' +
-          closedNotice +
-          '<div class="slot-list">' + (b.slots.length
-            ? b.slots.map(slotRow).join('')
-            : '<p class="muted">攤商還沒有設定時段。</p>') +
-          '</div>' +
-        '</div>';
+        /* 介紹攤位不用報名，整個報名區塊就不要出現 */
+        (b.infoOnly
+          ? '<div class="notice notice-info mt" style="margin-bottom:0">' +
+              '🎪 這個攤位不用報名，活動當天直接來參觀就可以了。</div>'
+          : '<div class="card mt">' +
+              '<div class="card-title"><h2>選擇報名時段</h2>' +
+                '<a class="small muted" href="#/mine">查詢／取消我的報名 →</a></div>' +
+              closedNotice +
+              '<div class="slot-list">' + ((b.slots || []).length
+                ? b.slots.map(slotRow).join('')
+                : '<p class="muted">攤商還沒有設定時段。</p>') +
+              '</div>' +
+            '</div>');
 
       UI.initSlideshows(app);
       painted = true;
