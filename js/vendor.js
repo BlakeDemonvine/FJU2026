@@ -141,18 +141,29 @@ window.VendorView = (function () {
         '<input type="file" id="photoInput" accept="image/*" multiple hidden>' +
       '</div>' +
 
-      '<div class="card">' +
-        '<div class="card-title"><h2>報名時段與人數上限</h2>' +
-          '<button class="btn btn-soft btn-sm" id="quickGen">⚡ 快速產生時段</button></div>' +
-        '<div id="slotEditor"></div>' +
-        '<button class="btn btn-ghost btn-sm mt" id="addSlot">＋ 新增一個時段</button>' +
-      '</div>' +
+      /* 介紹攤位（由總召設定）不用報名，所以時段與報名開關整個不顯示。
+         名稱、簡介、時數、照片都照常可以編輯。 */
+      (b.infoOnly
+        ? '<div class="card">' +
+            '<div class="card-title"><h2>報名設定</h2></div>' +
+            '<div class="notice notice-info" style="margin-bottom:0">' +
+              '🎪 總召把這個攤位設定為<strong>自由參觀</strong>，不需要報名，' +
+              '所以這裡沒有時段與人數上限要填。<br>' +
+              '玩家一樣會在首頁與地圖上看到你的攤位、照片與簡介。' +
+            '</div>' +
+          '</div>'
+        : '<div class="card">' +
+            '<div class="card-title"><h2>報名時段與人數上限</h2>' +
+              '<button class="btn btn-soft btn-sm" id="quickGen">⚡ 快速產生時段</button></div>' +
+            '<div id="slotEditor"></div>' +
+            '<button class="btn btn-ghost btn-sm mt" id="addSlot">＋ 新增一個時段</button>' +
+          '</div>' +
 
-      '<div class="card">' +
-        '<div class="card-title"><h2>報名開關</h2></div>' +
-        '<label class="switch"><input type="checkbox" id="fOpen"' + (b.closed ? '' : ' checked') + '>' +
-          '<span id="openLabel"></span></label>' +
-      '</div>' +
+          '<div class="card">' +
+            '<div class="card-title"><h2>報名開關</h2></div>' +
+            '<label class="switch"><input type="checkbox" id="fOpen"' + (b.closed ? '' : ' checked') + '>' +
+              '<span id="openLabel"></span></label>' +
+          '</div>') +
 
       '<div class="btn-row mt"><button class="btn" id="saveBtn">儲存所有變更</button>' +
         '<button class="btn btn-ghost" id="reloadBtn">重新載入</button></div>';
@@ -364,8 +375,12 @@ window.VendorView = (function () {
       if (e.dataTransfer && e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
     });
 
-    // 報名開關的說明文字隨狀態更新
+    // 介紹攤位沒有時段與報名開關那兩塊，這一段的事件就不用綁（儲存鈕還是要綁）
     var openBox = document.getElementById('fOpen');
+    if (openBox) bindSignupEvents(openBox);
+
+    function bindSignupEvents(openBox) {
+    // 報名開關的說明文字隨狀態更新
     var openLabel = document.getElementById('openLabel');
     function syncOpenLabel() {
       openLabel.textContent = openBox.checked
@@ -396,6 +411,7 @@ window.VendorView = (function () {
     };
 
     document.getElementById('quickGen').onclick = quickGenerate;
+    }
 
     document.getElementById('reloadBtn').onclick = function () { render(app); };
 
@@ -403,7 +419,8 @@ window.VendorView = (function () {
       var btn = this;
       var name = document.getElementById('fName').value.trim();
       if (!name) return UI.err('請填寫攤位名稱');
-      if (!state.slots.length) return UI.err('請至少新增一個報名時段');
+      var openEl = document.getElementById('fOpen');   // 介紹攤位沒有這個開關
+      if (openEl && !state.slots.length) return UI.err('請至少新增一個報名時段');
 
       var bad = null;
       var slots = state.slots.map(function (s, i) {
@@ -426,7 +443,7 @@ window.VendorView = (function () {
         duration: parseInt(document.getElementById('fDuration').value, 10) || 0,
         photos: state.photos,
         slots: slots,
-        closed: !document.getElementById('fOpen').checked
+        closed: openEl ? !openEl.checked : false
       })
         .then(function (res) {
           UI.ok('已儲存');
