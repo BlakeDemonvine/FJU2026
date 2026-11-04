@@ -177,7 +177,30 @@ window.AdminView = (function () {
       if (Math.abs(vs.k - lastEditK) < 0.001) return;
       lastEditK = vs.k;
       sizeEditPins();
+      layoutEditPins();
     });
+
+    /* 擠在一起的標記縮成小圓點，位置完全不動（跟玩家端同一套做法）。
+       放大地圖之後標記自然就分開了，編號會自己跑出來。 */
+    function layoutEditPins() {
+      var pins = UI.$$('.pin', pinLayer);
+      if (pins.length < 2) { pins.forEach(function (p) { p.classList.remove('is-tight'); }); return; }
+      pins.forEach(function (el) { el.classList.remove('is-tight'); });
+      var P = pins.map(function (el) {
+        var r = el.querySelector('.pin-dot').getBoundingClientRect();
+        return { el: el, x: r.left + r.width / 2, y: r.top + r.height / 2,
+                 r: Math.max(r.width, r.height) / 2 || 10 };
+      });
+      P.forEach(function (a, i) {
+        var nearest = Infinity;
+        P.forEach(function (b, j) {
+          if (i === j) return;
+          var d = Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y)) - b.r;
+          if (d < nearest) nearest = d;
+        });
+        a.el.classList.toggle('is-tight', nearest < a.r * 1.05);
+      });
+    }
     // 點地圖空白處 → 把目前選取的攤位放到那裡
     view.on('tap', function (e) {
       if (!selected) return;
@@ -257,6 +280,7 @@ window.AdminView = (function () {
       // 只在第一次對準，之後不要把總召自己放大的畫面彈掉
       if (!didFit && pts.length) { didFit = true; view.reset(); }
 
+      layoutEditPins();
       stage.classList.toggle('placing', !!selected);
       clearBtn.disabled = !selected || !byKey(selected) || byKey(selected).mapX === null;
 
