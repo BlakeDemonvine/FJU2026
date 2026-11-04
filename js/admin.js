@@ -129,16 +129,24 @@ window.AdminView = (function () {
         '<div class="card-title"><h2>攤位在地圖上的位置</h2>' +
           '<span class="small muted" id="placeCount"></span></div>' +
         '<p class="muted small" style="margin-top:-6px">' +
-          '先點右邊的攤位，再點地圖上的位置就定位好了；已經放上去的標記可以直接拖曳微調。' +
-          '玩家的首頁會看到這些標記。<br>' +
+          '先點右邊的攤位，再點地圖上的位置就定位好了；已經放上去的標記可以直接拖曳微調。<br>' +
+          '<strong>攤位很密的地方先用 ＋ 放大再點</strong>，會準很多；放大後可以直接拖曳地圖移動。' +
+          '選好攤位之後也可以用鍵盤方向鍵微調（按住 Shift 移動得更快）。<br>' +
           '編號用「-」分段的攤位（A1-1、A1-2）在地圖上算同一攤，一起定位、標記上只寫 A1。</p>' +
         (booths.length
           ? '<div class="map-editor">' +
-              '<div class="map-edit-stage" id="editStage">' +
-                '<img src="' + esc(mapSrc) + '" alt="攤位地圖" id="editMap">' +
-                '<div class="pin-layer" id="editPins"></div>' +
+              '<div>' +
+              '<div class="map-stage is-editor" id="editStage">' +
+                '<div class="map-pan">' +
+                  '<img src="' + esc(mapSrc) + '" alt="攤位地圖" id="editMap">' +
+                  '<div class="pin-layer" id="editPins"></div>' +
+                '</div>' +
+                MapView.controlsHTML(false, 'only-full') +
+              '</div>' +
+              '<div class="map-cap-bar">' + MapView.controlsHTML(false, 'map-ctrl-bar') + '</div>' +
               '</div>' +
               '<div>' +
+                '<input type="text" id="placeFilter" placeholder="搜尋攤位編號或名稱" style="margin-bottom:8px">' +
                 '<div class="place-list" id="placeList"></div>' +
                 '<button class="btn btn-ghost btn-sm mt" id="clearPos" disabled>清除選取攤位的位置</button>' +
               '</div>' +
@@ -153,17 +161,29 @@ window.AdminView = (function () {
     var list = document.getElementById('placeList');
     var clearBtn = document.getElementById('clearPos');
 
-    // 定位用的地圖也讓標記跟著縮放，手機上才不會整片疊在一起
-    (function () {
-      function sizeEditPins() {
-        var w = stage.clientWidth || 0;
-        if (!w) return;
-        stage.style.setProperty('--pin-scale', Math.max(0.55, Math.min(1, w / 760)).toFixed(3));
-      }
+    /* 定位地圖也可以縮放拖曳 —— A 區那一排攤位在原尺寸下只有幾個像素寬，
+       不放大根本點不準。預設視角一樣會對準已經定位好的那些標記。 */
+    var view = MapView.attach(stage, { onPinPointerDown: true });
+    MapView.bindControls(stage, view);
+    MapView.bindControls(stage.parentNode, view);
+    function sizeEditPins() {
+      var w = stage.clientWidth || 0;
+      if (!w) return;
+      stage.style.setProperty('--pin-scale', Math.max(0.55, Math.min(1, w / 760)).toFixed(3));
+    }
+    sizeEditPins();
+    var lastEditK = 0;
+    view.on('change', function (vs) {
+      if (Math.abs(vs.k - lastEditK) < 0.001) return;
+      lastEditK = vs.k;
       sizeEditPins();
-      if (window.ResizeObserver) new ResizeObserver(sizeEditPins).observe(stage);
-      else window.addEventListener('resize', sizeEditPins);
-    })();
+    });
+    // 點地圖空白處 → 把目前選取的攤位放到那裡
+    view.on('tap', function (e) {
+      if (!selected) return;
+      var c = view.toPercent(e.ev.clientX, e.ev.clientY);
+      save(byKey(selected), c.x, c.y);
+    });
 
     document.getElementById('editMap').onerror = function () {
       body.innerHTML = '<div class="card">' +
@@ -193,6 +213,9 @@ window.AdminView = (function () {
     }
 
     var groups = buildGroups();
+    var didFit = false;
+    var filterBox = document.getElementById('placeFilter');
+    if (filterBox) filterBox.oninput = function () { draw(); };
     function byKey(k) {
       return groups.filter(function (g) { return g.key === k; })[0];
     }
@@ -205,12 +228,20 @@ window.AdminView = (function () {
       pinLayer.innerHTML = groups.filter(function (g) { return g.mapX !== null; }).map(function (g) {
         return '<div class="pin' + (g.key === selected ? ' is-active' : '') + '" ' +
           'data-pin="' + esc(g.key) + '" style="left:' + g.mapX + '%;top:' + g.mapY + '%">' +
-          '<span class="pin-dot">' + esc(g.key) + '</span>' +
-          '<span class="pin-name">' + esc(g.label) + '</span>' +
+          '<span class="pin-in">' +
+            '<span class="pin-dot">' + esc(g.key) + '</span>' +
+            '<span class="pin-name">' + esc(g.label) + '</span>' +
+          '</span>' +
         '</div>';
       }).join('');
 
-      list.innerHTML = groups.map(function (g) {
+      // 攤位一多，用關鍵字篩一下比較好找
+      var kw = (filterBox && filterBox.value || '').trim().toUpperCase();
+      var shown = kw
+        ? groups.filter(function (g) { return (g.key + ' ' + g.label).toUpperCase().indexOf(kw) > -1; })
+        : groups;
+
+      list.innerHTML = shown.map(function (g) {
         var ok = g.mapX !== null;
         return '<button type="button" class="place-row' + (g.key === selected ? ' is-selected' : '') +
           '" data-row="' + esc(g.key) + '">' +
@@ -218,7 +249,13 @@ window.AdminView = (function () {
           '<span class="pname">' + esc(g.label) + '</span>' +
           '<span class="pstate ' + (ok ? 'done' : 'todo') + '">' + (ok ? '已定位' : '未定位') + '</span>' +
         '</button>';
-      }).join('');
+      }).join('') || '<p class="muted small" style="padding:6px 2px">找不到符合的攤位</p>';
+
+      var pts = groups.filter(function (g) { return g.mapX !== null; })
+        .map(function (g) { return { x: g.mapX, y: g.mapY }; });
+      view.setBounds(pts);
+      // 只在第一次對準，之後不要把總召自己放大的畫面彈掉
+      if (!didFit && pts.length) { didFit = true; view.reset(); }
 
       stage.classList.toggle('placing', !!selected);
       clearBtn.disabled = !selected || !byKey(selected) || byKey(selected).mapX === null;
@@ -252,26 +289,14 @@ window.AdminView = (function () {
         });
     }
 
-    function coords(ev) {
-      var r = stage.getBoundingClientRect();
-      return {
-        x: Math.max(0, Math.min(100, Math.round(((ev.clientX - r.left) / r.width) * 1000) / 10)),
-        y: Math.max(0, Math.min(100, Math.round(((ev.clientY - r.top) / r.height) * 1000) / 10))
-      };
-    }
-
-    // 點地圖 → 把目前選取的攤位放上去
-    stage.onclick = function (ev) {
-      if (!selected || ev.target.closest('.pin')) return;
-      var c = coords(ev);
-      save(byKey(selected), c.x, c.y);
-    };
+    function coords(ev) { return view.toPercent(ev.clientX, ev.clientY); }
 
     // 拖曳既有的標記微調位置
     function bindDrag() {
       UI.$$('.pin', pinLayer).forEach(function (pin) {
         pin.onpointerdown = function (ev) {
           ev.preventDefault();
+          ev.stopPropagation();                 // 不要變成拖曳地圖
           var group = byKey(pin.dataset.pin);
           if (!group) return;
           selected = group.key;
@@ -296,6 +321,21 @@ window.AdminView = (function () {
         };
       });
     }
+
+    /* 鍵盤微調：選好攤位之後用方向鍵一格一格推，比用滑鼠點準得多 */
+    function onKey(ev) {
+      if (!selected || !document.body.contains(stage)) return;
+      var map = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      var d = map[ev.key];
+      if (!d) return;
+      var g = byKey(selected);
+      if (!g || g.mapX === null) return;
+      ev.preventDefault();
+      var step = (ev.shiftKey ? 1 : 0.2);
+      save(g, Math.max(0, Math.min(100, Math.round((g.mapX + d[0] * step) * 10) / 10)),
+              Math.max(0, Math.min(100, Math.round((g.mapY + d[1] * step) * 10) / 10)));
+    }
+    document.addEventListener('keydown', onKey);
 
     clearBtn.onclick = function () {
       if (selected) save(byKey(selected), null, null);
