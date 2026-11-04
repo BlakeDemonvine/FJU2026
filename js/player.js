@@ -172,7 +172,7 @@ window.PlayerView = (function () {
       renderHome.__layout = layoutPins;
       layer.innerHTML = placed.map(function (g) {
         return '<a class="pin' + (g.allClosed ? ' is-closed' : '') + '" ' +
-          'href="#/booth/' + esc(g.boothId) + '" ' +
+          'href="' + esc(g.href) + '" ' +
           'data-pin="' + esc(g.key) + '" ' +
           'style="left:' + g.mapX + '%;top:' + g.mapY + '%" ' +
           'title="' + esc(g.key + ' ' + g.label) + '">' +
@@ -209,8 +209,12 @@ window.PlayerView = (function () {
       return order.map(function (k) {
         var g = map[k];
         g.label = g.names.length > 1
-          ? g.names[0] + '　等 ' + g.names.length + " 攤"
+          ? g.names[0] + '　等 ' + g.names.length + ' 攤'
           : g.names[0];
+        // 這個位置不只一攤的話，點下去是「一次看完」的頁面
+        g.href = g.names.length > 1
+          ? '#/area/' + encodeURIComponent(g.key)
+          : '#/booth/' + g.boothId;
         return g;
       });
     }
@@ -465,6 +469,84 @@ window.PlayerView = (function () {
 
   /* ================= 攤位詳情 ================= */
 
+  /** 一個攤位的完整內容：照片、簡介、報名時段。單攤頁與同位置多攤頁共用 */
+  function boothSection(b, opts) {
+    opts = opts || {};
+    var dur = UI.formatDuration(b.duration);
+    var closedNotice = b.allClosed
+      ? '<div class="notice notice-warn">這個攤位目前所有時段都已經停止報名了。</div>' : '';
+
+    return '<section class="booth-sec">' +
+      (opts.heading
+        ? '<div class="booth-sec-head">' +
+            (b.boothNo ? '<span class="booth-no">攤位：' + esc(b.boothNo) + '</span>' : '') +
+            '<h2 class="booth-sec-name">' + esc(b.name) + '</h2>' +
+            (dur ? '<p class="sub">⏱ 預計遊玩時數 ' + esc(dur) + '</p>' : '') +
+          '</div>'
+        : '') +
+      UI.slideshowHTML(b.photos) +
+      (b.description
+        ? '<div class="card mt"><h2>攤位簡介</h2><p style="margin:0">' + UI.nl2br(b.description) + '</p></div>'
+        : '') +
+      /* 介紹攤位不用報名，整個報名區塊就不要出現 */
+      (b.infoOnly
+        ? '<div class="notice notice-info mt" style="margin-bottom:0">' +
+            '🎪 這個攤位不用報名，活動當天直接來參觀就可以了。</div>'
+        : '<div class="card mt">' +
+            '<div class="card-title"><h2>選擇報名時段</h2>' +
+              '<a class="small muted" href="#/mine">查詢／取消我的報名 →</a></div>' +
+            closedNotice +
+            '<div class="slot-list">' + ((b.slots || []).length
+              ? b.slots.map(function (sl) { return slotRow(sl, b.boothId); }).join('')
+              : '<p class="muted">攤商還沒有設定時段。</p>') +
+            '</div>' +
+          '</div>') +
+    '</section>';
+  }
+
+  function slotRow(s, boothId) {
+    var pct = s.capacity ? Math.min(100, Math.round(s.taken / s.capacity * 100)) : 100;
+    var cls = s.closed ? 'stopped' : (s.remaining <= 0 ? 'full' : '');
+
+    var right;
+    if (s.closed) right = '<span class="tag tag-muted">已停止報名</span>';
+    else if (s.remaining <= 0) right = '<span class="tag tag-danger">名額已滿</span>';
+    else right = '<button class="btn" data-signup="' + esc(s.id) + '" ' +
+                 'data-booth="' + esc(boothId) + '">我要報名</button>';
+
+    return '<div class="slot-row ' + cls + '">' +
+      '<div style="flex:1;min-width:190px">' +
+        '<div class="slot-time">' + esc(s.label) + '</div>' +
+        '<div class="slot-meta">' + s.taken + ' / ' + s.capacity + ' 人' +
+          (!s.closed && s.remaining > 0 ? '　·　還剩 <strong>' + s.remaining + '</strong> 個名額' : '') +
+        '</div>' +
+        '<div class="meter' + (s.remaining <= 0 ? ' is-full' : '') + '"><span style="width:' + pct + '%"></span></div>' +
+      '</div>' +
+      '<div class="spacer"></div>' + right +
+    '</div>';
+  }
+
+  /** 把「我要報名」按鈕接上（可能同時有好幾個攤位） */
+  function bindSignups(root, list, reload) {
+    UI.$$('[data-signup]', root).forEach(function (btn) {
+      btn.onclick = function () {
+        var b = list.filter(function (x) { return String(x.boothId) === btn.dataset.booth; })[0];
+        if (!b) return;
+        var slot = (b.slots || []).filter(function (sl) { return String(sl.id) === btn.dataset.signup; })[0];
+        if (slot) openSignupModal(b, slot, reload);
+      };
+    });
+  }
+
+  /** 從首頁快取裡找出「同一個位置」的其他攤位（A1-1 的鄰居是 A1-2…） */
+  function siblingsOf(boothNo, boothId) {
+    var all = UI.cacheGet('booths', 30 * 60 * 1000) || [];
+    var key = UI.boothGroup(boothNo);
+    return all.filter(function (b) {
+      return UI.boothGroup(b.boothNo) === key && String(b.boothId) !== String(boothId);
+    });
+  }
+
   function renderBooth(app, boothId) {
     var painted = false;
     app.innerHTML = UI.loadingHTML('載入攤位資訊…');
@@ -486,10 +568,8 @@ window.PlayerView = (function () {
 
     function paint(b) {
       UI.stopSlideshows();
-      var closedNotice = b.allClosed
-        ? '<div class="notice notice-warn">這個攤位目前所有時段都已經停止報名了。</div>' : '';
-
       var dur = UI.formatDuration(b.duration);
+      var sibs = siblingsOf(b.boothNo, b.boothId);
 
       app.innerHTML =
         '<div class="page-head">' +
@@ -498,57 +578,102 @@ window.PlayerView = (function () {
           '<h1>' + esc(b.name) + '</h1>' +
           (dur ? '<p class="sub">⏱ 預計遊玩時數 ' + esc(dur) + '</p>' : '') +
         '</div>' +
-        UI.slideshowHTML(b.photos) +
-        (b.description
-          ? '<div class="card mt"><h2>攤位簡介</h2><p style="margin:0">' + UI.nl2br(b.description) + '</p></div>'
+        /* 同一個位置還有別攤的話，給一個一次看完的入口 */
+        (sibs.length
+          ? '<a class="notice notice-info same-spot" href="#/area/' +
+              encodeURIComponent(UI.boothGroup(b.boothNo)) + '">' +
+              '📍 同一個位置還有 ' + sibs.length + ' 攤（' +
+              sibs.map(function (x) { return esc(x.boothNo); }).join('、') + '）' +
+              '<span class="go">一起看 →</span></a>'
           : '') +
-        /* 介紹攤位不用報名，整個報名區塊就不要出現 */
-        (b.infoOnly
-          ? '<div class="notice notice-info mt" style="margin-bottom:0">' +
-              '🎪 這個攤位不用報名，活動當天直接來參觀就可以了。</div>'
-          : '<div class="card mt">' +
-              '<div class="card-title"><h2>選擇報名時段</h2>' +
-                '<a class="small muted" href="#/mine">查詢／取消我的報名 →</a></div>' +
-              closedNotice +
-              '<div class="slot-list">' + ((b.slots || []).length
-                ? b.slots.map(slotRow).join('')
-                : '<p class="muted">攤商還沒有設定時段。</p>') +
-              '</div>' +
-            '</div>');
+        boothSection(b, { heading: false });
 
       UI.initSlideshows(app);
       painted = true;
-
-      UI.$$('[data-signup]', app).forEach(function (btn) {
-        btn.onclick = function () {
-          var slot = b.slots.filter(function (s) { return s.id === btn.dataset.signup; })[0];
-          openSignupModal(b, slot, load);
-        };
-      });
-    }
-
-    function slotRow(s) {
-      var pct = s.capacity ? Math.min(100, Math.round(s.taken / s.capacity * 100)) : 100;
-      var cls = s.closed ? 'stopped' : (s.remaining <= 0 ? 'full' : '');
-
-      var right;
-      if (s.closed) right = '<span class="tag tag-muted">已停止報名</span>';
-      else if (s.remaining <= 0) right = '<span class="tag tag-danger">名額已滿</span>';
-      else right = '<button class="btn" data-signup="' + esc(s.id) + '">我要報名</button>';
-
-      return '<div class="slot-row ' + cls + '">' +
-        '<div style="flex:1;min-width:190px">' +
-          '<div class="slot-time">' + esc(s.label) + '</div>' +
-          '<div class="slot-meta">' + s.taken + ' / ' + s.capacity + ' 人' +
-            (!s.closed && s.remaining > 0 ? '　·　還剩 <strong>' + s.remaining + '</strong> 個名額' : '') +
-          '</div>' +
-          '<div class="meter' + (s.remaining <= 0 ? ' is-full' : '') + '"><span style="width:' + pct + '%"></span></div>' +
-        '</div>' +
-        '<div class="spacer"></div>' + right +
-      '</div>';
+      bindSignups(app, [b], load);
     }
 
     load(painted);
+  }
+
+  /* ========== 同一個位置的所有攤位（地圖上的 A1 = A1-1 + A1-2…） ========== */
+
+  function renderArea(app, key) {
+    var backLink = '<a class="back" href="#/">← 回到攤位列表</a>';
+    app.innerHTML = UI.loadingHTML('載入攤位資訊…');
+
+    var detail = [];     // 每個攤位的完整資料
+    var painted = false;
+
+    /** 從首頁清單挑出這個位置的攤位，依編號排序 */
+    function pick(list) {
+      return (list || [])
+        .filter(function (b) { return UI.boothGroup(b.boothNo) === key; })
+        .sort(function (a, b) { return UI.compareBoothNo(a.boothNo, b.boothNo); });
+    }
+
+    function paint() {
+      if (!detail.length) return;
+      UI.stopSlideshows();
+
+      app.innerHTML =
+        '<div class="page-head">' +
+          backLink +
+          '<h1>攤位 ' + esc(key) + '</h1>' +
+          '<p class="sub">這個位置有 ' + detail.length + ' 攤，往下滑可以一次看完，各自報名。</p>' +
+        '</div>' +
+        detail.map(function (b) { return boothSection(b, { heading: true }); }).join('');
+
+      UI.initSlideshows(app);
+      painted = true;
+      bindSignups(app, detail, function () { loadDetail(pick(listCache), true); });
+    }
+
+    var listCache = UI.cacheGet('booths', 30 * 60 * 1000) || [];
+
+    /** 幾個攤位的資料同時發出去，不是一個一個等 */
+    function loadDetail(rows, background) {
+      if (!rows.length) {
+        app.innerHTML = backLink + UI.errorHTML('找不到「' + key + '」這個位置的攤位');
+        return Promise.resolve();
+      }
+      if (rows.length === 1) {       // 只有一攤就直接用原本的單攤頁
+        location.replace('#/booth/' + rows[0].boothId);
+        return Promise.resolve();
+      }
+      return Promise.all(rows.map(function (b) {
+        return API.getBooth(b.boothId).then(function (res) {
+          UI.cacheSet('booth_' + b.boothId, res.booth);
+          return res.booth;
+        });
+      })).then(function (list) {
+        detail = list;
+        paint();
+      }).catch(function (e) {
+        if (background) return;
+        app.innerHTML = backLink + UI.errorHTML(e.message);
+      });
+    }
+
+    // 快取裡都有的話先畫出來，再去後端更新名額
+    var rows = pick(listCache);
+    if (rows.length > 1) {
+      var cached = rows.map(function (b) { return UI.cacheGet('booth_' + b.boothId, 5 * 60 * 1000); });
+      if (cached.every(Boolean)) { detail = cached; paint(); }
+    }
+
+    if (listCache.length) {
+      loadDetail(rows, painted);
+    } else {
+      // 沒有首頁快取（直接貼網址進來）就先抓清單
+      API.listBooths().then(function (res) {
+        listCache = res.booths || [];
+        UI.cacheSet('booths', listCache);
+        loadDetail(pick(listCache), painted);
+      }).catch(function (e) {
+        app.innerHTML = backLink + UI.errorHTML(e.message);
+      });
+    }
   }
 
   /* ================= 報名表單 ================= */
@@ -692,5 +817,5 @@ window.PlayerView = (function () {
     if (me.name && me.phone) lookup(true);
   }
 
-  return { renderHome: renderHome, renderBooth: renderBooth, renderMine: renderMine };
+  return { renderHome: renderHome, renderBooth: renderBooth, renderArea: renderArea, renderMine: renderMine };
 })();
