@@ -96,12 +96,8 @@ window.MapView = (function () {
       var y1 = bounds.y1 / 100 * st.natH - padY;
       var y2 = bounds.y2 / 100 * st.natH + padY;
       var bw = Math.max(1, x2 - x1), bh = Math.max(1, y2 - y1);
-      /* 一般情況：把標記範圍完整放進畫面。
-         但直式手機開全螢幕時，寬扁的地圖會上下空一大片 ——
-         這時改成至少讓圖片填滿畫面（使用者再自己左右拖曳）。 */
-      var contain = Math.min(s.w / bw, s.h / bh);
-      var cover = Math.max(s.w / st.natW, s.h / st.natH);
-      var k = clamp(Math.max(contain, cover), st.kMin, st.kMax);
+      // 一律「把所有標記完整放進畫面」—— 一打開就能看到全部攤位，要細節再自己放大
+      var k = clamp(Math.min(s.w / bw, s.h / bh), st.kMin, st.kMax);
       var cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
       return { k: k, tx: s.w / 2 - cx * k, ty: s.h / 2 - cy * k };
     }
@@ -304,7 +300,7 @@ window.MapView = (function () {
         full.box.appendChild(stage);
         stage.classList.add('is-full');
         if (UI && UI.lockScroll) UI.lockScroll(true);
-        requestAnimationFrame(function () { reset(); });
+        requestAnimationFrame(function () { reset(); showRotateHint(); });
       } else if (!on && full) {
         stage.classList.remove('is-full');
         full.parent.insertBefore(stage, full.next);
@@ -319,6 +315,26 @@ window.MapView = (function () {
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape' && full) toggleFull(false);
     });
+
+    /* 直式手機看寬扁的地圖，上下一定會空一片 —— 轉成橫的就大很多，提醒一下。
+       碰到畫面或四秒後自己消失。 */
+    function showRotateHint() {
+      if (!full) return;
+      var s = size();
+      if (s.h / s.w < 1.3) return;
+      if (full.box.querySelector('.map-rotate')) return;
+      var tip = document.createElement('div');
+      tip.className = 'map-rotate';
+      tip.textContent = '把手機轉橫的，地圖會更大';
+      full.box.appendChild(tip);
+      var kill = function () {
+        tip.classList.add('is-gone');
+        setTimeout(function () { tip.remove(); }, 400);
+        stage.removeEventListener('pointerdown', kill);
+      };
+      stage.addEventListener('pointerdown', kill);
+      setTimeout(kill, 4000);
+    }
 
     /* ---------- 啟動 ---------- */
 
