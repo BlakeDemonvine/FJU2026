@@ -296,16 +296,21 @@ p { margin: 0 0 .8em; }
 .pin-layer .pin-in { pointer-events: auto; }
 
 /* ---------- 地圖上的攤位標記 ---------- */
-/* 標記本身是地圖上的一個「點」（寬高為 0），真正看得到的是裡面的 .pin-in。
-   .pin-in 會反向縮放（--pz），所以不管地圖放大幾倍，標記看起來都一樣大。
-   --nx / --ny：標記太擠的時候 JS 會把它們稍微撥開一點，才不會互相蓋住。 */
+/* 標記本身是地圖上的一個「點」（寬高為 0），真正看得到的是裡面的 .pin-in，
+   而 .pin-in 裡面只有那顆圓點 —— 攤位名稱是絕對定位掛在圓點下方的。
+
+   這一點很重要：名稱如果跟圓點一起排在流程裡，整個方塊會變高變寬，
+   「置中」的就不是圓點而是方塊，圓點會被往上推十幾個像素。
+   地圖大的時候（桌機）看不太出來，地圖一小（手機）同樣的像素就是好幾個百分比，
+   標記看起來就全部歪掉了。
+
+   .pin-in 會反向縮放（--pz），所以不管地圖放大幾倍，標記看起來都一樣大。 */
 .pin { position: absolute; width: 0; height: 0; z-index: 1; text-decoration: none; }
 .pin-in {
   position: absolute; left: 0; top: 0;
   transform-origin: 0 0;
-  transform: scale(var(--pz, 1)) translate(-50%, -50%) translate(var(--nx, 0px), var(--ny, 0px));
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  line-height: 1.2;
+  transform: scale(var(--pz, 1)) translate(-50%, -50%);
+  display: block; line-height: 0;
 }
 .pin:hover { text-decoration: none; z-index: 3; }
 .pin-dot {
@@ -319,18 +324,20 @@ p { margin: 0 0 .8em; }
   box-shadow: 0 2px 7px rgba(58, 42, 30, .4);
   transition: transform .18s ease, background .18s ease;
 }
+/* 名稱掛在圓點正下方，絕對定位 —— 不影響圓點的位置 */
 .pin-name {
+  position: absolute; top: calc(100% + 4px); left: 50%;
   max-width: min(130px, 34vw); padding: 2px 8px; border-radius: 6px;
   background: color-mix(in srgb, var(--text) 90%, transparent); color: var(--bg-elev);
-  font-size: .68rem; font-weight: 700; white-space: nowrap;
+  font-size: .68rem; font-weight: 700; line-height: 1.5; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
-  opacity: 0; transform: translateY(-3px); transition: opacity .18s, transform .18s;
+  opacity: 0; transform: translate(-50%, -3px); transition: opacity .18s, transform .18s;
   pointer-events: none;
 }
 .pin.is-closed .pin-dot { background: var(--text-faint); }
 .pin:hover .pin-dot, .pin.is-active .pin-dot { transform: scale(1.35); }
 .pin.is-active .pin-dot { background: var(--forest); }
-.pin:hover .pin-name, .pin.is-active .pin-name { opacity: 1; transform: translateY(0); }
+.pin:hover .pin-name, .pin.is-active .pin-name { opacity: 1; transform: translate(-50%, 0); }
 .pin.is-active { z-index: 4; }
 .pin.is-active .pin-dot { animation: pinPulse 1.6s ease-out infinite; }
 @keyframes pinPulse {
@@ -355,7 +362,7 @@ p { margin: 0 0 .8em; }
 .map-stage.is-editor .pin-in { cursor: grab; }
 .map-stage.is-editor .pin.dragging .pin-in { cursor: grabbing; }
 /* 名稱只在選到或滑過時出現；33 個攤位全開會糊成一片 */
-.map-stage.is-editor .pin.is-active .pin-name { opacity: 1; transform: none; }
+.map-stage.is-editor .pin.is-active .pin-name { opacity: 1; transform: translate(-50%, 0); }
 
 .place-list { display: flex; flex-direction: column; gap: 6px; max-height: 470px; overflow-y: auto; }
 .place-row {
@@ -916,7 +923,7 @@ td.num { font-variant-numeric: tabular-nums; }
   /* 總召定位地圖：手機上同時顯示所有攤位名稱會整片疊在一起，
      只顯示目前選到的那一個 */
   .map-stage.is-editor .pin-name { display: none; }
-  .map-stage.is-editor .pin.is-active .pin-name { display: block; opacity: 1; transform: none; }
+  .map-stage.is-editor .pin.is-active .pin-name { display: block; opacity: 1; transform: translate(-50%, 0); }
 
   .topbar { background: var(--bg-elev); backdrop-filter: none; -webkit-backdrop-filter: none; }
   .modal-host { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(35, 22, 14, .68); }
@@ -935,7 +942,7 @@ td.num { font-variant-numeric: tabular-nums; }
   .pin:hover .pin-dot { transform: none; }
   .pin:hover .pin-name { opacity: 0; }
   .pin.is-active .pin-dot { transform: scale(1.3); }
-  .pin.is-active .pin-name { opacity: 1; transform: translateY(0); }
+  .pin.is-active .pin-name { opacity: 1; transform: translate(-50%, 0); }
   .place-row:hover { border-color: var(--border); }
   .dropzone:hover { border-color: var(--border-strong); background: transparent; color: var(--text-dim); }
   tbody tr:hover { background: transparent; }
@@ -958,3 +965,33 @@ td.num { font-variant-numeric: tabular-nums; }
   .map-cap-title { display: none; }
   .map-ctrl-bar button { width: 28px; height: 28px; font-size: .85rem; }
 }
+
+/* 擠在一起的標記縮成小圓點（位置完全不動），放大或點到才展開成完整編號。
+   以前是把標記互相撥開，位置就不準了 —— 手機上尤其明顯。 */
+.pin.is-tight .pin-dot {
+  min-width: 0; width: calc(15px * var(--pin-scale, 1)); height: calc(15px * var(--pin-scale, 1));
+  padding: 0; font-size: 0;
+  border-width: max(2px, calc(2.5px * var(--pin-scale, 1)));
+  box-shadow: 0 1px 4px rgba(58, 42, 30, .55);
+}
+.pin.is-tight .pin-name { display: none; }
+.pin.is-tight.is-active .pin-dot,
+.pin.is-tight:hover .pin-dot {
+  min-width: calc(26px * var(--pin-scale, 1)); width: auto;
+  height: calc(26px * var(--pin-scale, 1));
+  padding: 0 calc(7px * var(--pin-scale, 1));
+  font-size: calc(.74rem * var(--pin-scale, 1));
+}
+.pin.is-tight.is-active .pin-name { display: block; }
+.pin.is-tight.is-active, .pin.is-tight:hover { z-index: 5; }
+
+/* 全螢幕地圖：直式手機的轉向提示 */
+.map-rotate {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+  background: color-mix(in srgb, var(--text) 92%, transparent); color: var(--bg-elev);
+  padding: 9px 18px; border-radius: 99px; font-size: .82rem; font-weight: 700;
+  box-shadow: var(--shadow); pointer-events: none; z-index: 8;
+  transition: opacity .35s;
+}
+.map-rotate.is-gone { opacity: 0; }
