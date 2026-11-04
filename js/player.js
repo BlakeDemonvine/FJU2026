@@ -89,12 +89,17 @@ window.PlayerView = (function () {
       '<section class="home-fit" id="homeFit">' +
         '<figure class="map-card" id="mapCard">' +
           '<div class="map-stage" id="mapStage">' +
-            '<img src="' + esc(mapSrc) + '" alt="園遊會攤位地圖" id="mapImg" ' +
-              'decoding="async" fetchpriority="high">' +
-            '<div class="pin-layer" id="pinLayer"></div>' +
+            '<div class="map-pan">' +
+              '<img src="' + esc(mapSrc) + '" alt="園遊會攤位地圖" id="mapImg" ' +
+                'decoding="async" fetchpriority="high">' +
+              '<div class="pin-layer" id="pinLayer"></div>' +
+            '</div>' +
+            MapView.controlsHTML(false, 'only-full', true) +
           '</div>' +
-          '<figcaption class="map-cap">🗺️ 園遊會攤位地圖　' +
-            '<span class="muted" id="mapHint">點攤位標記可以直接前往</span></figcaption>' +
+          '<figcaption class="map-cap">' +
+            '<span class="map-cap-title">🗺️ 園遊會攤位地圖</span>' +
+            '<span class="muted" id="mapHint">點攤位標記可以直接前往</span>' +
+            MapView.controlsHTML(true, 'map-ctrl-bar') + '</figcaption>' +
         '</figure>' +
         '<div id="boothList">' + UI.loadingHTML('正在載入攤位…') + '</div>' +
         '<div class="rail-island" id="railIsland" hidden></div>' +
@@ -113,17 +118,22 @@ window.PlayerView = (function () {
       homeFit.classList.add('no-map');
     };
 
-    /* 地圖載好之後把真實比例寫進 CSS，版面就不會因為圖片晚到而跳動；
-       手機上也能用 svh 限制高度而不影響標記位置。 */
-    function applyMapRatio() {
-      if (!mapImg.naturalWidth || !mapImg.naturalHeight) return;
-      mapStage.style.setProperty('--map-ar', (mapImg.naturalWidth / mapImg.naturalHeight).toFixed(4));
+    /* 地圖改成可以縮放、拖曳。預設視角會自動對準所有標記的涵蓋範圍，
+       所以一打開就是攤位那一區，空白校區不會佔掉版面。 */
+    var mapView = MapView.attach(mapStage, {});
+    MapView.bindControls(mapStage, mapView);                            // 全螢幕時浮在地圖上那一組
+    MapView.bindControls(document.getElementById('mapCard'), mapView);  // 平常在地圖下方那一列
+    /* 只有倍率變了才需要重算標記撥開的位移（純平移時相對距離不變），
+       不然每一個縮放的影格都要量三十幾個標記，手機會卡。 */
+    var lastK = 0;
+    mapView.on('change', function (s) {
+      if (Math.abs(s.k - lastK) < 0.001) return;
+      lastK = s.k;
       sizePins();
-    }
-    if (mapImg.complete) applyMapRatio();
-    mapImg.addEventListener('load', applyMapRatio);
+    });
+    mapView.on('tap', function () { mapView.toggleFull(true); });   // 點空白處 → 全螢幕
 
-    /* 標記大小跟著地圖一起縮放。固定 26px 的標記在手機上等於放大了兩三倍，
+    /* 標記大小跟著地圖框一起縮放。固定 26px 的標記在手機上等於放大了兩三倍，
        距離近的兩攤就會疊在一起（A1 蓋住 A5 就是這樣來的）。 */
     function sizePins() {
       var w = mapStage.clientWidth || 0;
@@ -133,11 +143,6 @@ window.PlayerView = (function () {
       if (renderHome.__spread) renderHome.__spread();
     }
     sizePins();
-    if (window.ResizeObserver) {
-      new ResizeObserver(sizePins).observe(mapStage);
-    } else {
-      window.addEventListener('resize', sizePins);
-    }
 
     /** 把有定位的攤位畫到地圖上。
      *  同一個位置可能有好幾攤（A1-1、A1-2），地圖上只畫一個標記、只寫 A1。 */
@@ -145,19 +150,25 @@ window.PlayerView = (function () {
       var layer = document.getElementById('pinLayer');
       var placed = groupForMap(list);
 
-      mapImg.style.cursor = 'zoom-in';
-      mapImg.onclick = function () { UI.viewImage(mapImg.src); };
+      if (renderHome.__mapView !== mapView) renderHome.__mapView = mapView;
+      /* 預設視角對準所有標記的涵蓋範圍。
+         只有範圍真的變了才重設視角，不然每兩分鐘的背景更新會把使用者
+         放大／拖曳好的畫面彈回去。 */
+      var pts = placed.map(function (g) { return { x: g.mapX, y: g.mapY }; });
+      var sigB = JSON.stringify(pts);
+      mapView.setBounds(pts);
+      if (sigB !== paintPins.__bounds) { paintPins.__bounds = sigB; mapView.reset(); }
 
       if (!placed.length) {
         layer.innerHTML = '';
-        document.getElementById('mapHint').textContent = '點一下可以放大';
+        document.getElementById('mapHint').textContent = '按 ⤢ 可以放大看';
         return;
       }
 
       // 手機上標題列放不下長句子，會折成兩行吃掉版面
       document.getElementById('mapHint').textContent =
         window.matchMedia('(max-width: 520px)').matches
-          ? '點標記前往攤位' : '點標記前往攤位，點空白處放大地圖';
+          ? '點標記前往攤位' : '點標記前往攤位，兩指可縮放，⤢ 展開全螢幕';
       renderHome.__spread = spreadPins;
       layer.innerHTML = placed.map(function (g) {
         return '<a class="pin' + (g.allClosed ? ' is-closed' : '') + '" ' +
@@ -165,8 +176,10 @@ window.PlayerView = (function () {
           'data-pin="' + esc(g.key) + '" ' +
           'style="left:' + g.mapX + '%;top:' + g.mapY + '%" ' +
           'title="' + esc(g.key + ' ' + g.label) + '">' +
-          '<span class="pin-dot">' + esc(g.key) + '</span>' +
-          '<span class="pin-name">' + esc(g.label) + '</span>' +
+          '<span class="pin-in">' +
+            '<span class="pin-dot">' + esc(g.key) + '</span>' +
+            '<span class="pin-name">' + esc(g.label) + '</span>' +
+          '</span>' +
         '</a>';
       }).join('');
 
@@ -209,18 +222,22 @@ window.PlayerView = (function () {
       var pins = UI.$$('#pinLayer .pin');
       if (pins.length < 2) return;
 
-      var w = mapStage.clientWidth, h = mapStage.clientHeight;
-      if (!w || !h) return;
+      var box = mapStage.getBoundingClientRect();
+      if (!box.width) return;
 
-      var P = pins.map(function (el) {
-        var dot = el.querySelector('.pin-dot');
+      // 先把上次的位移清掉，再量一次實際位置（地圖可以縮放，不能用百分比直接算）
+      pins.forEach(function (el) {
         el.style.removeProperty('--nx');
         el.style.removeProperty('--ny');
+      });
+
+      var P = pins.map(function (el) {
+        var r = el.querySelector('.pin-dot').getBoundingClientRect();
         return {
           el: el,
-          x: parseFloat(el.style.left) / 100 * w,
-          y: parseFloat(el.style.top) / 100 * h,
-          r: Math.max(dot.offsetWidth, dot.offsetHeight) / 2 || 10,
+          x: r.left + r.width / 2 - box.left,
+          y: r.top + r.height / 2 - box.top,
+          r: Math.max(r.width, r.height) / 2 || 10,
           ox: 0, oy: 0
         };
       });
@@ -366,8 +383,11 @@ window.PlayerView = (function () {
           '<span class="rail-no">攤位</span>' +
           '<span>' + (best + 1) + ' / ' + list.length + '</span>';
 
-        // 滑到哪一攤，地圖上就亮哪一攤
+        // 滑到哪一攤，地圖上就亮哪一攤；地圖有放大的話順便跟著移過去
         focusPin(cur.boothNo);
+        if (mapView.isZoomed() && typeof cur.mapX === 'number') {
+          mapView.focusOn(cur.mapX, cur.mapY);
+        }
       }
 
       rail.addEventListener('scroll', function () {
