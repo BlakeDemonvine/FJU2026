@@ -187,36 +187,48 @@ window.PlayerView = (function () {
     }
 
     /**
-     * 把攤位依「地圖群組」合併：A1-1 與 A1-2 算同一攤，標記上只寫 A1。
-     * 位置取該群組裡第一個有定位的攤位；點下去會進到該群組的第一個攤位。
+     * 把攤位依「地圖群組」合併：B3-1 與 B3-2 算同一攤，標記上只寫 B3。
+     *
+     * 分組是看「編號」，不是看「有沒有定位」——
+     * 只要 B3-2 存在，B3 就算兩攤，就算總召只幫 B3-1 定過位也一樣。
+     * （之前是先把沒定位的攤位整個跳過，所以 B3 只數到一攤，
+     *   點下去就直接進 B3-1 的單攤頁了。）
+     * 標記的位置取這一組裡第一個有定位的攤位。
      */
     function groupForMap(list) {
       var order = [], map = {};
+
       list.forEach(function (b) {
-        if (typeof b.mapX !== 'number' || typeof b.mapY !== 'number') return;
         var key = UI.boothGroup(b.boothNo);
         if (!map[key]) {
           map[key] = {
             key: key, boothId: b.boothId,
-            mapX: b.mapX, mapY: b.mapY,
+            mapX: null, mapY: null,
             names: [], allClosed: true
           };
           order.push(key);
         }
-        map[key].names.push(b.name);
-        if (!b.allClosed) map[key].allClosed = false;
+        var g = map[key];
+        g.names.push(b.name);
+        if (!b.allClosed) g.allClosed = false;
+        // 這一組的位置：用第一個定好位的
+        if (g.mapX === null && typeof b.mapX === 'number' && typeof b.mapY === 'number') {
+          g.mapX = b.mapX; g.mapY = b.mapY;
+        }
       });
-      return order.map(function (k) {
-        var g = map[k];
-        g.label = g.names.length > 1
-          ? g.names[0] + '　等 ' + g.names.length + ' 攤'
-          : g.names[0];
-        // 這個位置不只一攤的話，點下去是「一次看完」的頁面
-        g.href = g.names.length > 1
-          ? '#/area/' + encodeURIComponent(g.key)
-          : '#/booth/' + g.boothId;
-        return g;
-      });
+
+      return order.map(function (k) { return map[k]; })
+        .filter(function (g) { return g.mapX !== null; })   // 整組都沒定位就不畫標記
+        .map(function (g) {
+          g.label = g.names.length > 1
+            ? g.names[0] + '　等 ' + g.names.length + ' 攤'
+            : g.names[0];
+          // 這個位置不只一攤的話，點下去是「一次看完」的頁面
+          g.href = g.names.length > 1
+            ? '#/area/' + encodeURIComponent(g.key)
+            : '#/booth/' + g.boothId;
+          return g;
+        });
     }
 
     /* 位置很接近的攤位（例如 A1 跟 A5 只差幾公尺），在手機的小地圖上
@@ -591,6 +603,16 @@ window.PlayerView = (function () {
       UI.initSlideshows(app);
       painted = true;
       bindSignups(app, [b], load);
+
+      /* 直接貼網址進來、沒有首頁清單的快取時，背景補抓一次，
+         才不會漏掉「同一個位置還有別攤」的提示 */
+      if (!sibs.length && !UI.cacheGet('booths', 30 * 60 * 1000) && !paint.__fetched) {
+        paint.__fetched = true;
+        API.listBooths().then(function (res) {
+          UI.cacheSet('booths', res.booths || []);
+          if (location.hash.indexOf('#/booth/' + boothId) === 0) paint(b);
+        }).catch(function () {});
+      }
     }
 
     load(painted);
