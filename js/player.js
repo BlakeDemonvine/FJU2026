@@ -140,7 +140,7 @@ window.PlayerView = (function () {
       if (!w) return;
       var scale = Math.max(0.52, Math.min(1, w / 760));
       mapStage.style.setProperty('--pin-scale', scale.toFixed(3));
-      if (renderHome.__spread) renderHome.__spread();
+      if (renderHome.__layout) renderHome.__layout();
     }
     sizePins();
 
@@ -169,7 +169,7 @@ window.PlayerView = (function () {
       document.getElementById('mapHint').textContent =
         window.matchMedia('(max-width: 520px)').matches
           ? '點標記前往攤位' : '點標記前往攤位，兩指可縮放，⤢ 展開全螢幕';
-      renderHome.__spread = spreadPins;
+      renderHome.__layout = layoutPins;
       layer.innerHTML = placed.map(function (g) {
         return '<a class="pin' + (g.allClosed ? ' is-closed' : '') + '" ' +
           'href="#/booth/' + esc(g.boothId) + '" ' +
@@ -183,7 +183,7 @@ window.PlayerView = (function () {
         '</a>';
       }).join('');
 
-      spreadPins();
+      layoutPins();
     }
 
     /**
@@ -218,57 +218,39 @@ window.PlayerView = (function () {
     /* 位置很接近的攤位（例如 A1 跟 A5 只差幾公尺），在手機的小地圖上
        會整個疊在一起。這裡把擠在一起的標記互相推開一點點，
        每個標記最多只偏離真實位置一個標記的距離，還是看得出大概在哪裡。 */
-    function spreadPins() {
+    /**
+     * 標記永遠放在正確的位置，絕對不移動。
+     *
+     * （舊版會把太擠的標記互相「撥開」，桌機上地圖大、標記遠，撥不到所以看起來準；
+     *  手機上地圖小、標記擠，每個都被推開十幾個像素 —— 這就是「手機上點位都會歪」
+     *  的原因。現在改成位置不動，改用縮小標記來解決重疊。）
+     *
+     * 擠在一起的標記會縮成一個小圓點（不顯示編號），放大地圖或點到它時才展開成
+     * 完整的編號標記。這樣位置永遠是真的，看起來也不會糊成一坨。
+     */
+    function layoutPins() {
       var pins = UI.$$('#pinLayer .pin');
-      if (pins.length < 2) return;
+      if (!pins.length) return;
+      if (pins.length < 2) { pins[0].classList.remove('is-tight'); return; }
 
-      var box = mapStage.getBoundingClientRect();
-      if (!box.width) return;
-
-      // 先把上次的位移清掉，再量一次實際位置（地圖可以縮放，不能用百分比直接算）
-      pins.forEach(function (el) {
-        el.style.removeProperty('--nx');
-        el.style.removeProperty('--ny');
-      });
+      // 先全部還原成完整樣式再量，才知道「如果都展開會不會撞在一起」
+      pins.forEach(function (el) { el.classList.remove('is-tight'); });
 
       var P = pins.map(function (el) {
         var r = el.querySelector('.pin-dot').getBoundingClientRect();
-        return {
-          el: el,
-          x: r.left + r.width / 2 - box.left,
-          y: r.top + r.height / 2 - box.top,
-          r: Math.max(r.width, r.height) / 2 || 10,
-          ox: 0, oy: 0
-        };
+        return { el: el, x: r.left + r.width / 2, y: r.top + r.height / 2,
+                 r: Math.max(r.width, r.height) / 2 || 10 };
       });
 
-      for (var pass = 0; pass < 40; pass++) {
-        var moved = false;
-        for (var i = 0; i < P.length; i++) {
-          for (var j = i + 1; j < P.length; j++) {
-            var a = P[i], b = P[j];
-            var dx = (b.x + b.ox) - (a.x + a.ox);
-            var dy = (b.y + b.oy) - (a.y + a.oy);
-            var d = Math.sqrt(dx * dx + dy * dy);
-            if (d < 0.01) { dx = (i % 2 ? 1 : -1); dy = 0.3; d = 1; }  // 完全重疊時給個方向
-            var want = a.r + b.r + 3;
-            if (d >= want) continue;
-            var push = (want - d) / 2 * 0.6;
-            var ux = dx / d, uy = dy / d;
-            a.ox -= ux * push; a.oy -= uy * push;
-            b.ox += ux * push; b.oy += uy * push;
-            moved = true;
-          }
-        }
-        if (!moved) break;
-      }
-
-      P.forEach(function (p) {
-        var m = Math.sqrt(p.ox * p.ox + p.oy * p.oy);
-        var max = p.r * 1.8;
-        if (m > max) { p.ox *= max / m; p.oy *= max / m; }
-        p.el.style.setProperty('--nx', p.ox.toFixed(1) + 'px');
-        p.el.style.setProperty('--ny', p.oy.toFixed(1) + 'px');
+      P.forEach(function (a, i) {
+        var nearest = Infinity;
+        P.forEach(function (b, j) {
+          if (i === j) return;
+          var dx = b.x - a.x, dy = b.y - a.y;
+          var d = Math.sqrt(dx * dx + dy * dy) - b.r;
+          if (d < nearest) nearest = d;
+        });
+        a.el.classList.toggle('is-tight', nearest < a.r * 1.05);
       });
     }
 
