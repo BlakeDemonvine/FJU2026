@@ -995,3 +995,20 @@ td.num { font-variant-numeric: tabular-nums; }
   transition: opacity .35s;
 }
 .map-rotate.is-gone { opacity: 0; }
+
+/* ---------- 同一個位置的多個攤位 ---------- */
+.booth-sec + .booth-sec {
+  margin-top: 26px; padding-top: 24px;
+  border-top: 2px dashed var(--border);
+}
+.booth-sec-head { margin-bottom: 12px; }
+.booth-sec-name { margin: 2px 0 2px; font-size: 1.32rem; font-weight: 800; }
+.booth-sec-head .sub { color: var(--text-dim); font-size: .9rem; margin: 0; }
+
+/* 單攤頁上「同一個位置還有別攤」的入口 */
+.same-spot {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  text-decoration: none; margin-bottom: 16px;
+}
+.same-spot:hover { text-decoration: none; filter: brightness(.97); }
+.same-spot .go { margin-left: auto; font-weight: 800; white-space: nowrap; }
