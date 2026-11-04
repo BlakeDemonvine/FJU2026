@@ -89,6 +89,10 @@ window.App = (function () {
         setActiveNav('home');
         PlayerView.renderBooth(app, r.arg);
         break;
+      case 'area':
+        setActiveNav('home');
+        PlayerView.renderArea(app, decodeURIComponent(r.arg || ''));
+        break;
       case 'mine':
         setActiveNav('mine');
         PlayerView.renderMine(app);
