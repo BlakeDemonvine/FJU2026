@@ -212,16 +212,36 @@ window.UI = (function () {
     });
   }
 
-  /* ---------- 幻燈片 ---------- */
+  /* ---------- 幻燈片 ----------
+   * 可以用手指左右滑（滑的時候照片會跟著手指走），放開手就吸附到最近的一張；
+   * 不去碰它的話就自己輪播。照片本身不可點擊。
+   * 攤位照片與首頁的主視覺用同一套。
+   */
 
-  /* 幻燈片：純自動輪播，照片不可點擊。
-     第一張立刻載入，其餘等快輪到了才載，手機開攤位頁不會一次拉十張圖。 */
   var SLIDE_W = [640, 1000];
   var SLIDE_SIZES = '(max-width: 720px) 94vw, 1000px';
 
+  function dotsHTML(n) {
+    if (n < 2) return '';
+    var out = '';
+    for (var i = 0; i < n; i++) {
+      out += '<button type="button" class="' + (i === 0 ? 'active' : '') +
+             '" data-go="' + i + '" aria-label="第 ' + (i + 1) + ' 張"></button>';
+    }
+    return '<div class="slide-dots">' + out + '</div>';
+  }
+
+  function shell(inner, n, extra) {
+    return '<div class="slideshow' + (extra ? ' ' + extra : '') + '" data-slideshow>' +
+      '<div class="slide-view"><div class="slide-track">' + inner + '</div></div>' +
+      dotsHTML(n) +
+    '</div>';
+  }
+
+  /** 攤位的展示照片（來源是 Google Drive） */
   function slideshowHTML(photos) {
     if (!photos || !photos.length) {
-      return '<div class="slideshow"><div class="slideshow-track" style="display:grid;place-items:center">' +
+      return '<div class="slideshow"><div class="slide-view empty">' +
              '<span style="font-size:2.8rem;opacity:.3">🎈</span></div></div>';
     }
     var imgs = photos.map(function (p, i) {
@@ -232,14 +252,24 @@ window.UI = (function () {
         cls: 'slide-img', alt: '展示照片 ' + (i + 1),
         widths: SLIDE_W, sizes: SLIDE_SIZES, defer: i > 0
       });
-      return '<div class="slide' + (i === 0 ? ' active' : '') + '">' + bg + main + '</div>';
+      return '<div class="slide">' + bg + main + '</div>';
     }).join('');
-    var dots = photos.length > 1
-      ? '<div class="slide-dots" aria-hidden="true">' + photos.map(function (_, i) {
-          return '<i' + (i === 0 ? ' class="active"' : '') + '></i>';
-        }).join('') + '</div>'
-      : '';
-    return '<div class="slideshow" data-slideshow><div class="slideshow-track">' + imgs + '</div>' + dots + '</div>';
+    return shell(imgs, photos.length);
+  }
+
+  /** 首頁的主視覺。高度會跟著目前這一張的比例走，兩張圖長寬不同也不會被切到 */
+  function bannerHTML(srcs, alt) {
+    var list = (srcs || []).filter(Boolean);
+    if (!list.length) return '';
+    var imgs = list.map(function (src, i) {
+      return '<div class="slide">' +
+        '<img class="slide-bg" src="' + esc(src) + '" alt="" aria-hidden="true" draggable="false">' +
+        '<img class="slide-img" src="' + esc(src) + '" draggable="false" decoding="async"' +
+          (i === 0 ? '' : ' loading="lazy"') +
+          ' alt="' + esc((alt || '主視覺') + ' ' + (i + 1)) + '">' +
+      '</div>';
+    }).join('');
+    return shell(imgs, list.length, 'is-banner');
   }
 
   var slideTimers = [];
@@ -254,28 +284,91 @@ window.UI = (function () {
       if (box.__init) return;
       box.__init = true;
 
+      var view = $('.slide-view', box);
+      var track = $('.slide-track', box);
       var slides = $$('.slide', box);
-      var dots = $$('.slide-dots i', box);
+      var dots = $$('.slide-dots button', box);
+      var n = slides.length;
       var idx = 0;
 
       $$('.slide-img', box).forEach(function (im) { bindImgFallback(im); });
 
-      if (slides.length < 2) return;
-
-      function preload(i) {
-        var s = slides[(i + slides.length) % slides.length];
+      function hydrate(i) {
+        var s = slides[((i % n) + n) % n];
         if (s) hydrateImg(s.querySelector('.slide-img'));
       }
-      preload(1);   // 先把下一張準備好，換頁時才不會空白
 
+      function apply(animate) {
+        track.style.transition = animate ? 'transform .42s cubic-bezier(.4,0,.2,1)' : 'none';
+        track.style.transform = 'translate3d(' + (-idx * 100) + '%,0,0)';
+        dots.forEach(function (d, k) { d.classList.toggle('active', k === idx); });
+      }
+
+      function goTo(i, animate) {
+        idx = ((i % n) + n) % n;
+        hydrate(idx); hydrate(idx + 1); hydrate(idx - 1);
+        apply(animate !== false);
+      }
+
+      apply(false);
+      if (n < 2) return;
+      hydrate(1);
+
+      dots.forEach(function (d) {
+        d.onclick = function () { pause(); goTo(+d.dataset.go); };
+      });
+
+      /* ---- 手指滑動 ---- */
+      var drag = null;
+      var paused = 0;
+      function pause() { paused = Date.now(); }
+
+      box.addEventListener('pointerdown', function (ev) {
+        if (ev.target.closest('.slide-dots')) return;
+        drag = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, dx: 0, lock: '' };
+      });
+
+      box.addEventListener('pointermove', function (ev) {
+        if (!drag || ev.pointerId !== drag.id) return;
+        var dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+        if (!drag.lock) {
+          if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+          // 一開始就往上下滑的話就讓頁面捲動，不要搶
+          drag.lock = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+          if (drag.lock === 'x') { try { box.setPointerCapture(ev.pointerId); } catch (e) {} }
+        }
+        if (drag.lock !== 'x') return;
+        if (ev.cancelable) ev.preventDefault();
+        drag.dx = dx;
+        hydrate(idx + (dx < 0 ? 1 : -1));
+        var w = view.clientWidth || 1;
+        var move = dx / w * 100;
+        // 到頭或到尾的時候拉動的幅度減半，有「拉不動」的手感
+        if ((idx === 0 && dx > 0) || (idx === n - 1 && dx < 0)) move *= 0.35;
+        track.style.transition = 'none';
+        track.style.transform = 'translate3d(' + (-idx * 100 + move) + '%,0,0)';
+      });
+
+      function endDrag(ev) {
+        if (!drag || (ev && ev.pointerId !== drag.id)) return;
+        var dx = drag.dx, moved = drag.lock === 'x';
+        drag = null;
+        if (!moved) return;
+        pause();
+        var w = view.clientWidth || 1;
+        if (Math.abs(dx) > Math.min(70, w * 0.18)) goTo(idx + (dx < 0 ? 1 : -1));
+        else apply(true);
+      }
+      box.addEventListener('pointerup', endDrag);
+      box.addEventListener('pointercancel', function () { drag = null; apply(true); });
+
+      /* ---- 自動輪播 ---- */
       var ms = (window.APP_CONFIG && window.APP_CONFIG.SLIDESHOW_MS) || 3500;
       slideTimers.push(setInterval(function () {
         if (!document.body.contains(box)) return;
-        if (document.hidden) return;          // 分頁在背景就暫停，省電省流量
-        idx = (idx + 1) % slides.length;
-        slides.forEach(function (s, k) { s.classList.toggle('active', k === idx); });
-        dots.forEach(function (d, k) { d.classList.toggle('active', k === idx); });
-        preload(idx + 1);
+        if (document.hidden || drag) return;            // 分頁在背景、或正在滑 → 暫停
+        if (Date.now() - paused < ms * 2) return;       // 剛滑過就先讓他看一下
+        goTo(idx + 1);
       }, ms));
     });
   }
@@ -470,6 +563,32 @@ window.UI = (function () {
     return '約 ' + h + ' 小時' + (m ? ' ' + m + ' 分鐘' : '');
   }
 
+  /* ---------- 價格 ----------
+   * 後端的 price：null = 攤商還沒填、0 = 免費、其他 = 金額。
+   * 還沒填的攤位在玩家端不顯示價格（寧可不講，也不要寫錯成免費）。
+   */
+
+  /** 有填過價格嗎（0 也算有填） */
+  function hasPrice(price) {
+    return price !== null && price !== undefined && price !== '';
+  }
+
+  /** 價格 → 「免費」／「120 元」；還沒填回空字串 */
+  function priceText(price) {
+    if (!hasPrice(price)) return '';
+    var n = parseInt(price, 10);
+    if (isNaN(n) || n <= 0) return '免費';
+    return n + ' 元';
+  }
+
+  /** 價格標籤。還沒填就不產生標籤 */
+  function priceTag(price) {
+    if (!hasPrice(price)) return '';
+    var n = parseInt(price, 10);
+    if (isNaN(n) || n <= 0) return '<span class="tag tag-ok">免費</span>';
+    return '<span class="tag tag-amber">💰 ' + n + ' 元</span>';
+  }
+
   function downloadCSV(filename, rows) {
     var csv = rows.map(function (r) {
       return r.map(function (c) {
@@ -564,7 +683,8 @@ window.UI = (function () {
     loadingHTML: loadingHTML, emptyHTML: emptyHTML, errorHTML: errorHTML,
     toast: toast, ok: ok, err: err,
     modal: modal, confirm: confirmDialog,
-    slideshowHTML: slideshowHTML, initSlideshows: initSlideshows, stopSlideshows: stopSlideshows,
+    slideshowHTML: slideshowHTML, bannerHTML: bannerHTML,
+    initSlideshows: initSlideshows, stopSlideshows: stopSlideshows,
     store: store, compressImage: compressImage, growthEmoji: growthEmoji,
     formatPhone: formatPhone, downloadCSV: downloadCSV, busy: busy,
     viewImage: viewImage, compareBoothNo: compareBoothNo, boothGroup: boothGroup,
@@ -574,6 +694,7 @@ window.UI = (function () {
     cacheGet: cacheGet, cacheSet: cacheSet,
     timeToMin: timeToMin, minToTime: minToTime, splitLabel: splitLabel,
     formatDuration: formatDuration, pad2: pad2,
+    hasPrice: hasPrice, priceText: priceText, priceTag: priceTag,
     setGrowth: setGrowth, bumpGrowth: bumpGrowth, paintGrowth: paintGrowth, growthCount: growthCount
   };
 })();
