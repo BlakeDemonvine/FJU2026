@@ -132,6 +132,7 @@ window.API = (function () {
   /* ---------- 攤商 ---------- */
   var vendorLogin       = function (code)  { return call('vendorLogin', { code: code }); };
   var vendorSave        = function (p)     { return call('vendorSave', p); };
+  var vendorSetPrice    = function (p)     { return call('vendorSetPrice', p); };
   var vendorUploadPhoto = function (p)     { return call('vendorUploadPhoto', p); };
   var vendorSignups     = function (code)  { return call('vendorSignups', { code: code }); };
   var vendorRemoveSignup= function (p)     { return call('vendorRemoveSignup', p); };
@@ -160,6 +161,7 @@ window.API = (function () {
     cancelSignup: cancelSignup,
     vendorLogin: vendorLogin,
     vendorSave: vendorSave,
+    vendorSetPrice: vendorSetPrice,
     vendorUploadPhoto: vendorUploadPhoto,
     vendorSignups: vendorSignups,
     vendorRemoveSignup: vendorRemoveSignup,
