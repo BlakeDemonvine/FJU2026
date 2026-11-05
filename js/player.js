@@ -305,7 +305,7 @@ window.PlayerView = (function () {
          圖片也會重新解碼閃一下。 */
       var sig = JSON.stringify(list.map(function (b) {
         return [b.boothId, b.boothNo, b.name, b.description, b.duration,
-                b.totalRemaining, b.slotCount, b.allClosed, b.mapX, b.mapY,
+                b.totalRemaining, b.slotCount, b.allClosed, b.mapX, b.mapY, b.price,
                 (b.photos && b.photos[0] && (b.photos[0].fileId || b.photos[0].url)) || ''];
       }));
       if (sig === lastSignature && document.getElementById('boothRail')) {
@@ -429,13 +429,14 @@ window.PlayerView = (function () {
 
       var dur = UI.formatDuration(b.duration);
 
-      /* 介紹攤位不用報名，所以不顯示名額與時段，改標示「自由參觀」 */
-      var tags = b.infoOnly
+      /* 介紹攤位不用報名，所以不顯示名額，改標示「自由參觀」。
+         右邊那個標籤顯示費用（攤商還沒填的話就不顯示）。 */
+      var tags = (b.infoOnly
         ? '<span class="tag tag-brand">🎪 自由參觀</span>'
         : (b.allClosed
             ? '<span class="tag tag-danger">已截止報名</span>'
-            : '<span class="tag tag-ok">尚餘 ' + b.totalRemaining + ' 個名額</span>') +
-          '<span class="tag tag-muted">' + b.slotCount + ' 個時段</span>';
+            : '<span class="tag tag-ok">尚餘 ' + b.totalRemaining + ' 個名額</span>')) +
+        UI.priceTag(b.price);
 
       return '<a class="booth-card' + (!b.infoOnly && b.allClosed ? ' is-closed' : '') +
              '" href="#/booth/' + esc(b.boothId) + '">' +
@@ -493,7 +494,13 @@ window.PlayerView = (function () {
         ? '<div class="booth-sec-head">' +
             (b.boothNo ? '<span class="booth-no">攤位：' + esc(b.boothNo) + '</span>' : '') +
             '<h2 class="booth-sec-name">' + esc(b.name) + '</h2>' +
-            (dur ? '<p class="sub">⏱ 預計遊玩時數 ' + esc(dur) + '</p>' : '') +
+            (dur || UI.hasPrice(b.price)
+              ? '<p class="sub">' +
+                  (dur ? '⏱ 預計遊玩時數 ' + esc(dur) : '') +
+                  (dur && UI.hasPrice(b.price) ? '　‧　' : '') +
+                  (UI.hasPrice(b.price) ? '💰 費用 ' + esc(UI.priceText(b.price)) : '') +
+                '</p>'
+              : '') +
           '</div>'
         : '') +
       UI.slideshowHTML(b.photos) +
@@ -588,7 +595,13 @@ window.PlayerView = (function () {
           '<a class="back" href="#/">← 回到攤位列表</a>' +
           (b.boothNo ? '<div><span class="booth-no">攤位：' + esc(b.boothNo) + '</span></div>' : '') +
           '<h1>' + esc(b.name) + '</h1>' +
-          (dur ? '<p class="sub">⏱ 預計遊玩時數 ' + esc(dur) + '</p>' : '') +
+          (dur || UI.hasPrice(b.price)
+            ? '<p class="sub">' +
+                (dur ? '⏱ 預計遊玩時數 ' + esc(dur) : '') +
+                (dur && UI.hasPrice(b.price) ? '　‧　' : '') +
+                (UI.hasPrice(b.price) ? '💰 費用 ' + esc(UI.priceText(b.price)) : '') +
+              '</p>'
+            : '') +
         '</div>' +
         /* 同一個位置還有別攤的話，給一個一次看完的入口 */
         (sibs.length
