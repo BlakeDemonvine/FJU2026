@@ -429,14 +429,14 @@ window.PlayerView = (function () {
 
       var dur = UI.formatDuration(b.duration);
 
-      /* 介紹攤位不用報名，所以不顯示名額，改標示「自由參觀」。
-         右邊那個標籤顯示費用（攤商還沒填的話就不顯示）。 */
-      var tags = (b.infoOnly
+      /* 介紹攤位不用報名，所以不顯示名額也不顯示費用，改標示「自由參觀」。
+         需要報名的攤位右邊那個標籤顯示費用（攤商還沒填的話就不顯示）。 */
+      var tags = b.infoOnly
         ? '<span class="tag tag-brand">🎪 自由參觀</span>'
         : (b.allClosed
             ? '<span class="tag tag-danger">已截止報名</span>'
-            : '<span class="tag tag-ok">尚餘 ' + b.totalRemaining + ' 個名額</span>')) +
-        UI.priceTag(b.price);
+            : '<span class="tag tag-ok">尚餘 ' + b.totalRemaining + ' 個名額</span>') +
+          UI.priceTag(b.price);
 
       return '<a class="booth-card' + (!b.infoOnly && b.allClosed ? ' is-closed' : '') +
              '" href="#/booth/' + esc(b.boothId) + '">' +
@@ -494,13 +494,7 @@ window.PlayerView = (function () {
         ? '<div class="booth-sec-head">' +
             (b.boothNo ? '<span class="booth-no">攤位：' + esc(b.boothNo) + '</span>' : '') +
             '<h2 class="booth-sec-name">' + esc(b.name) + '</h2>' +
-            (dur || UI.hasPrice(b.price)
-              ? '<p class="sub">' +
-                  (dur ? '⏱ 預計遊玩時數 ' + esc(dur) : '') +
-                  (dur && UI.hasPrice(b.price) ? '　‧　' : '') +
-                  (UI.hasPrice(b.price) ? '💰 費用 ' + esc(UI.priceText(b.price)) : '') +
-                '</p>'
-              : '') +
+            subLine(b, dur) +
           '</div>'
         : '') +
       UI.slideshowHTML(b.photos) +
@@ -521,6 +515,17 @@ window.PlayerView = (function () {
             '</div>' +
           '</div>') +
     '</section>';
+  }
+
+  /** 攤位標題下方那一行：時數與費用。自由參觀的攤位不用報名，也就不講費用 */
+  function subLine(b, dur) {
+    var showPrice = !b.infoOnly && UI.hasPrice(b.price);
+    if (!dur && !showPrice) return '';
+    return '<p class="sub">' +
+      (dur ? '⏱ 預計遊玩時數 ' + esc(dur) : '') +
+      (dur && showPrice ? '　‧　' : '') +
+      (showPrice ? '💰 費用 ' + esc(UI.priceText(b.price)) : '') +
+    '</p>';
   }
 
   function slotRow(s, boothId) {
@@ -595,13 +600,7 @@ window.PlayerView = (function () {
           '<a class="back" href="#/">← 回到攤位列表</a>' +
           (b.boothNo ? '<div><span class="booth-no">攤位：' + esc(b.boothNo) + '</span></div>' : '') +
           '<h1>' + esc(b.name) + '</h1>' +
-          (dur || UI.hasPrice(b.price)
-            ? '<p class="sub">' +
-                (dur ? '⏱ 預計遊玩時數 ' + esc(dur) : '') +
-                (dur && UI.hasPrice(b.price) ? '　‧　' : '') +
-                (UI.hasPrice(b.price) ? '💰 費用 ' + esc(UI.priceText(b.price)) : '') +
-              '</p>'
-            : '') +
+          subLine(b, dur) +
         '</div>' +
         /* 同一個位置還有別攤的話，給一個一次看完的入口 */
         (sibs.length
