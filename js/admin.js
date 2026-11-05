@@ -433,7 +433,7 @@ window.AdminView = (function () {
       d.booths.forEach(function (b) {
         rows.push([b.boothNo, b.code, b.name, b.infoOnly ? '只做介紹' : '需要報名',
                    b.infoOnly ? '自由參觀' : (b.closed ? '停止報名' : (b.configured ? '開放中' : '未設定')),
-                   UI.hasPrice(b.price) ? UI.priceText(b.price) : '未填',
+                   b.infoOnly ? '' : (UI.hasPrice(b.price) ? UI.priceText(b.price) : '未填'),
                    b.infoOnly ? '' : b.taken, b.infoOnly ? '' : b.capacity,
                    b.infoOnly ? '' : b.slots.length, b.createdAt]);
       });
@@ -534,8 +534,8 @@ window.AdminView = (function () {
         : '<span class="muted">—</span>') + '</td>' +
       '<td>' + mode + '</td>' +
       '<td>' + status + '</td>' +
-      '<td class="num">' + (UI.hasPrice(b.price)
-        ? esc(UI.priceText(b.price))
+      '<td class="num">' + (b.infoOnly ? '<span class="muted">—</span>'
+        : UI.hasPrice(b.price) ? esc(UI.priceText(b.price))
         : '<span class="tag tag-warn">未填</span>') + '</td>' +
       '<td class="num">' + (b.infoOnly ? '<span class="muted">—</span>' : b.taken + ' / ' + b.capacity) + '</td>' +
       '<td class="num">' + (b.infoOnly ? '<span class="muted">—</span>'
