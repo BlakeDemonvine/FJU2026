@@ -70,6 +70,62 @@ window.VendorView = (function () {
     });
     state.tab = state.tab || 'info';
     paint(app);
+
+    /* 之前就把照片、簡介都放上來、但還沒填價格的攤商，
+       一登入就跳一個彈窗請他補填（只補價格，不會動到其他設定）。 */
+    if (!UI.hasPrice(booth.price) && looksConfigured(booth)) promptPrice(app);
+  }
+
+  /** 這個攤位已經有在用了嗎（有名字、照片、簡介或時段其中之一） */
+  function looksConfigured(b) {
+    return !!(String(b.name || '').trim() ||
+              (b.photos || []).length ||
+              String(b.description || '').trim() ||
+              (b.slots || []).length);
+  }
+
+  /** 登入後提醒補填價格的彈窗 */
+  function promptPrice(app) {
+    UI.modal(
+      '<h3>請補填參加費用</h3>' +
+      '<p class="muted">系統新增了「參加費用」這一欄，你的攤位還沒有填。' +
+      '填好之後玩家在攤位列表上就會看到費用。</p>' +
+      '<div class="field">' +
+        '<label for="mPrice">參加費用（元）</label>' +
+        '<input type="number" id="mPrice" min="0" max="99999" step="5" inputmode="numeric" ' +
+          'placeholder="不收費請填 0">' +
+        '<p class="muted small" style="margin:6px 0 0">填 <strong>0</strong> 會顯示「免費」。</p>' +
+      '</div>' +
+      '<div class="btn-row">' +
+        '<button class="btn btn-ghost" data-free>我們是免費的</button>' +
+        '<button class="btn" data-save>儲存費用</button>' +
+      '</div>',
+      function (root, close) {
+        var input = root.querySelector('#mPrice');
+        var saveBtn = root.querySelector('[data-save]');
+        input.focus();
+
+        function send(price, btn) {
+          UI.busy(btn, true, '儲存中…');
+          API.vendorSetPrice({ code: state.code, price: price })
+            .then(function (res) {
+              close();
+              UI.ok('已儲存費用');
+              state.booth = res.booth;
+              paint(app);
+            })
+            .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
+        }
+
+        root.querySelector('[data-free]').onclick = function () { send(0, this); };
+        saveBtn.onclick = function () {
+          var n = parseInt(input.value.trim(), 10);
+          if (isNaN(n) || n < 0) return UI.err('請填 0 或正整數');
+          send(n, this);
+        };
+        input.onkeydown = function (e) { if (e.key === 'Enter') saveBtn.click(); };
+      }
+    );
   }
 
   /* ================= 主畫面 ================= */
@@ -123,12 +179,23 @@ window.VendorView = (function () {
           '<input type="text" id="fName" maxlength="40" value="' + esc(b.name) + '" placeholder="例：射氣球大挑戰"></div>' +
         '<div class="field"><label for="fDesc">攤位簡介</label>' +
           '<textarea id="fDesc" maxlength="2000" placeholder="介紹一下你們的遊戲玩法、獎品、注意事項…">' + esc(b.description) + '</textarea></div>' +
-        '<div class="field" style="max-width:280px;margin-bottom:0">' +
-          '<label for="fDuration">預計遊玩時數</label>' +
-          '<div style="display:flex;align-items:center;gap:8px">' +
-            '<input type="number" id="fDuration" min="0" max="600" step="5" value="' +
-              (Number(b.duration) || '') + '" placeholder="例：15">' +
-            '<span class="muted small" style="white-space:nowrap">分鐘</span>' +
+        '<div class="field-row" style="margin-bottom:0">' +
+          '<div class="field" style="margin-bottom:0">' +
+            '<label for="fDuration">預計遊玩時數</label>' +
+            '<div style="display:flex;align-items:center;gap:8px">' +
+              '<input type="number" id="fDuration" min="0" max="600" step="5" value="' +
+                (Number(b.duration) || '') + '" placeholder="例：15">' +
+              '<span class="muted small" style="white-space:nowrap">分鐘</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="field" style="margin-bottom:0">' +
+            '<label for="fPrice">參加費用</label>' +
+            '<div style="display:flex;align-items:center;gap:8px">' +
+              '<input type="number" id="fPrice" min="0" max="99999" step="5" inputmode="numeric" value="' +
+                (UI.hasPrice(b.price) ? esc(String(b.price)) : '') + '" placeholder="免費請填 0">' +
+              '<span class="muted small" style="white-space:nowrap">元</span>' +
+            '</div>' +
+            '<p class="muted small" style="margin:6px 0 0">不收費就填 <strong>0</strong>，玩家端會顯示「免費」。</p>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -435,21 +502,46 @@ window.VendorView = (function () {
       });
       if (bad) return UI.err(bad);
 
-      UI.busy(btn, true, '儲存中…');
-      API.vendorSave({
-        code: state.code,
-        name: name,
-        description: document.getElementById('fDesc').value,
-        duration: parseInt(document.getElementById('fDuration').value, 10) || 0,
-        photos: state.photos,
-        slots: slots,
-        closed: openEl ? !openEl.checked : false
-      })
-        .then(function (res) {
-          UI.ok('已儲存');
-          enter(app, state.code, res.booth);
+      var priceEl = document.getElementById('fPrice');
+      var priceRaw = priceEl ? priceEl.value.trim() : '';
+
+      function send(price) {
+        UI.busy(btn, true, '儲存中…');
+        API.vendorSave({
+          code: state.code,
+          name: name,
+          description: document.getElementById('fDesc').value,
+          duration: parseInt(document.getElementById('fDuration').value, 10) || 0,
+          price: price,
+          photos: state.photos,
+          slots: slots,
+          closed: openEl ? !openEl.checked : false
         })
-        .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
+          .then(function (res) {
+            UI.ok('已儲存');
+            enter(app, state.code, res.booth);
+          })
+          .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
+      }
+
+      /* 沒填價格就送出：先提醒一次，確認之後當成免費（0）存回去 */
+      if (priceRaw === '') {
+        UI.confirm({
+          title: '還沒填參加費用',
+          message: '你沒有填參加費用，玩家看到的會是「免費」喔。\n' +
+                   '如果要收費，請按「回去填金額」；不收費的話直接按「就是免費」。',
+          confirmText: '就是免費'
+        }).then(function (yes) {
+          if (!yes) { if (priceEl) { priceEl.focus(); priceEl.select(); } return; }
+          if (priceEl) priceEl.value = '0';
+          send(0);
+        });
+        return;
+      }
+
+      var priceNum = parseInt(priceRaw, 10);
+      if (isNaN(priceNum) || priceNum < 0) return UI.err('參加費用請填 0 或正整數');
+      send(priceNum);
     };
   }
 
