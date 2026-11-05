@@ -73,7 +73,7 @@ window.VendorView = (function () {
 
     /* 之前就把照片、簡介都放上來、但還沒填價格的攤商，
        一登入就跳一個彈窗請他補填（只補價格，不會動到其他設定）。 */
-    if (!UI.hasPrice(booth.price) && looksConfigured(booth)) promptPrice(app);
+    if (!booth.infoOnly && !UI.hasPrice(booth.price) && looksConfigured(booth)) promptPrice(app);
   }
 
   /** 這個攤位已經有在用了嗎（有名字、照片、簡介或時段其中之一） */
@@ -188,15 +188,17 @@ window.VendorView = (function () {
               '<span class="muted small" style="white-space:nowrap">分鐘</span>' +
             '</div>' +
           '</div>' +
-          '<div class="field" style="margin-bottom:0">' +
-            '<label for="fPrice">參加費用</label>' +
-            '<div style="display:flex;align-items:center;gap:8px">' +
-              '<input type="number" id="fPrice" min="0" max="99999" step="5" inputmode="numeric" value="' +
-                (UI.hasPrice(b.price) ? esc(String(b.price)) : '') + '" placeholder="免費請填 0">' +
-              '<span class="muted small" style="white-space:nowrap">元</span>' +
-            '</div>' +
-            '<p class="muted small" style="margin:6px 0 0">不收費就填 <strong>0</strong>，玩家端會顯示「免費」。</p>' +
-          '</div>' +
+          /* 自由參觀的攤位不用報名，也就不收費，費用欄位整個不顯示 */
+          (b.infoOnly ? '' :
+            '<div class="field" style="margin-bottom:0">' +
+              '<label for="fPrice">參加費用</label>' +
+              '<div style="display:flex;align-items:center;gap:8px">' +
+                '<input type="number" id="fPrice" min="0" max="99999" step="5" inputmode="numeric" value="' +
+                  (UI.hasPrice(b.price) ? esc(String(b.price)) : '') + '" placeholder="免費請填 0">' +
+                '<span class="muted small" style="white-space:nowrap">元</span>' +
+              '</div>' +
+              '<p class="muted small" style="margin:6px 0 0">不收費就填 <strong>0</strong>，玩家端會顯示「免費」。</p>' +
+            '</div>') +
         '</div>' +
       '</div>' +
 
@@ -502,7 +504,7 @@ window.VendorView = (function () {
       });
       if (bad) return UI.err(bad);
 
-      var priceEl = document.getElementById('fPrice');
+      var priceEl = document.getElementById('fPrice');   // 自由參觀的攤位沒有這一欄
       var priceRaw = priceEl ? priceEl.value.trim() : '';
 
       function send(price) {
@@ -523,6 +525,8 @@ window.VendorView = (function () {
           })
           .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
       }
+
+      if (!priceEl) return send(undefined);   // 自由參觀：不送價格，後端保留原值
 
       /* 沒填價格就送出：先提醒一次，確認之後當成免費（0）存回去 */
       if (priceRaw === '') {
