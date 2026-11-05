@@ -392,7 +392,7 @@ window.AdminView = (function () {
         (d.booths.length
           ? '<div class="table-wrap"><table><thead><tr>' +
               '<th>編號</th><th>代碼</th><th>攤位名稱</th><th>類型</th><th>狀態</th>' +
-              '<th>報名 / 名額</th><th>時段</th><th>名單</th><th>操作</th>' +
+              '<th>費用</th><th>報名 / 名額</th><th>時段</th><th>名單</th><th>操作</th>' +
             '</tr></thead><tbody>' + d.booths.map(boothRow).join('') + '</tbody></table></div>'
           : UI.emptyHTML('🎪', '還沒有任何攤位', '先在上面填攤位編號產生一組代碼給攤商')) +
       '</div>';
@@ -428,10 +428,12 @@ window.AdminView = (function () {
     };
 
     document.getElementById('expBooths').onclick = function () {
-      var rows = [['攤位編號', '代碼', '攤位名稱', '類型', '狀態', '已報名', '總名額', '時段數', '建立時間']];
+      var rows = [['攤位編號', '代碼', '攤位名稱', '類型', '狀態', '參加費用',
+                   '已報名', '總名額', '時段數', '建立時間']];
       d.booths.forEach(function (b) {
         rows.push([b.boothNo, b.code, b.name, b.infoOnly ? '只做介紹' : '需要報名',
                    b.infoOnly ? '自由參觀' : (b.closed ? '停止報名' : (b.configured ? '開放中' : '未設定')),
+                   UI.hasPrice(b.price) ? UI.priceText(b.price) : '未填',
                    b.infoOnly ? '' : b.taken, b.infoOnly ? '' : b.capacity,
                    b.infoOnly ? '' : b.slots.length, b.createdAt]);
       });
@@ -532,6 +534,9 @@ window.AdminView = (function () {
         : '<span class="muted">—</span>') + '</td>' +
       '<td>' + mode + '</td>' +
       '<td>' + status + '</td>' +
+      '<td class="num">' + (UI.hasPrice(b.price)
+        ? esc(UI.priceText(b.price))
+        : '<span class="tag tag-warn">未填</span>') + '</td>' +
       '<td class="num">' + (b.infoOnly ? '<span class="muted">—</span>' : b.taken + ' / ' + b.capacity) + '</td>' +
       '<td class="num">' + (b.infoOnly ? '<span class="muted">—</span>'
         : '<button class="btn btn-ghost btn-sm" data-slots="' + esc(b.boothId) + '">' + b.slots.length + ' 個</button>') + '</td>' +
