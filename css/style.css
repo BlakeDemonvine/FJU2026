@@ -123,9 +123,16 @@ p { margin: 0 0 .8em; }
   100% { transform: scale(1)   rotate(0deg); }
 }
 @media (prefers-reduced-motion: reduce) { .brand-mark.pop { animation: none; } }
+.brand-text { min-width: 0; }
 .brand-text strong {
   font-size: 1rem; font-weight: 800; letter-spacing: -.01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
+}
+/* 副標：合辦的家庭共學日。整串放一行會被截掉，所以拆成第二行小字 */
+.brand-sub {
+  display: block; font-size: .72rem; font-weight: 700; line-height: 1.25;
+  color: var(--text-dim); letter-spacing: -.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
@@ -151,10 +158,11 @@ p { margin: 0 0 .8em; }
 .hero {
   max-width: var(--maxw); width: 100%; margin: 18px auto 0; padding: 0 16px;
 }
-.hero img {
+.hero > img {
   width: 100%; display: block; border-radius: var(--radius);
   box-shadow: var(--shadow); border: 1px solid var(--border);
 }
+.hero .slideshow { box-shadow: var(--shadow); }
 
 /* ---------- 版面 ---------- */
 .app {
@@ -450,20 +458,46 @@ p { margin: 0 0 .8em; }
 .tag-amber { background: var(--amber-soft); color: var(--warn); }
 .tag-muted { background: var(--bg-sunken); color: var(--text-faint); }
 
-/* ---------- 幻燈片 ---------- */
-.slideshow { position: relative; border-radius: var(--radius); overflow: hidden; background: #241A13; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+/* ---------- 幻燈片 ----------
+   可以用手指左右滑，不滑就自己輪播。攤位照片與首頁主視覺共用同一套。 */
+.slideshow {
+  position: relative; border-radius: var(--radius); overflow: hidden;
+  background: #241A13; border: 1px solid var(--border); box-shadow: var(--shadow-sm);
+  /* 直向留給頁面捲動，橫向交給我們自己處理，這樣滑照片不會連頁面一起動 */
+  touch-action: pan-y;
+}
 /* 固定高度，不用 aspect-ratio：aspect-ratio 碰到 max-height 會連寬度一起縮，照片就不置中了 */
-.slideshow-track { position: relative; width: 100%; height: clamp(240px, 44vw, 460px); }
-.slide { position: absolute; inset: 0; opacity: 0; transition: opacity .5s ease; }
-.slide.active { opacity: 1; }
-.slide img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.slide-view { position: relative; width: 100%; height: clamp(240px, 44vw, 460px); overflow: hidden; }
+.slide-view.empty { display: grid; place-items: center; }
+/* 主視覺：兩張圖長寬差很多，用固定框＋模糊底圖，才不會每換一張整頁高度就跳一次 */
+.slideshow.is-banner .slide-view { height: clamp(170px, 44vw, 465px); }
+/* 465px 是「主視覺橫幅在 1120px 版面寬度下剛好填滿」的高度；
+   直式的海報就靠模糊底圖補兩側，換圖的時候版面不會上下跳。 */
+.slide-track {
+  display: flex; width: 100%; height: 100%;
+  will-change: transform; transform: translate3d(0,0,0);
+}
+.slide { position: relative; flex: 0 0 100%; width: 100%; height: 100%; }
+.slide img {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  border: 0; border-radius: 0; box-shadow: none;
+  user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
+}
 /* 底層：模糊放大的同一張照片，直式照片才不會兩側空一大片黑。
    來源用 64px 的小圖，模糊半徑也壓小，手機 GPU 才不會為了這層一直掉幀。 */
 .slide .slide-bg { object-fit: cover; filter: blur(12px) brightness(.5); transform: scale(1.18); }
 .slide .slide-img { object-fit: contain; }
-.slide-dots { position: absolute; bottom: 12px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; }
-.slide-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.5); display: block; }
-.slide-dots i.active { background: #fff; width: 20px; border-radius: 99px; }
+.slide-dots {
+  position: absolute; bottom: 10px; left: 0; right: 0;
+  display: flex; justify-content: center; align-items: center; gap: 6px;
+}
+.slide-dots button {
+  width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(255,255,255,.5); cursor: pointer; transition: width .25s ease, background .25s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+.slide-dots button.active { background: #fff; width: 22px; border-radius: 99px; }
+.slide-dots button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
 /* ---------- 時段 ---------- */
 .slot-list { display: grid; gap: 10px; }
@@ -483,6 +517,12 @@ p { margin: 0 0 .8em; }
 
 /* ---------- 表單 ---------- */
 .field { margin-bottom: 16px; }
+/* 兩個短欄位併成一排（時數＋費用）。窄螢幕會自己變成上下兩行 */
+.field-row {
+  display: grid; gap: 14px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  max-width: 580px;
+}
 .field > label { display: block; font-size: .85rem; font-weight: 800; margin-bottom: 6px; }
 .field .hint { font-size: .78rem; color: var(--text-faint); margin: 6px 0 0; }
 
@@ -768,6 +808,7 @@ td.num { font-variant-numeric: tabular-nums; }
   .hero { padding: 0 14px; margin-top: 14px; }
   h1 { font-size: 1.3rem; }
   .brand-text strong { font-size: .85rem; }
+  .brand-sub { font-size: .66rem; }
   .brand-mark { font-size: 1.2rem; }
   :root { --app-gutter: 14px; }
   .topbar-inner { gap: 8px; padding: 9px 14px; }
@@ -831,7 +872,7 @@ td.num { font-variant-numeric: tabular-nums; }
   .tag { font-size: .71rem; padding: 2px 9px; }
   .rail-island { padding: 7px 16px; font-size: .82rem; }
 
-  .slideshow-track { height: clamp(200px, 52vw, 320px); }
+  .slide-view { height: clamp(200px, 52vw, 320px); }
 
   /* ========== 首頁：上半地圖、下半攤位，剛好一個畫面 ==========
      往下滑的時候會自動停在這個位置，不會停在一半。
