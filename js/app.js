@@ -7,6 +7,14 @@ window.App = (function () {
   var app = document.getElementById('app');
   var refreshTimer = null;
 
+  /* 首頁最上面的主視覺幻燈片。要加減圖片就改這個陣列（檔案放進 assets/）。
+     第一張也是 index.html 裡 preload 的那張，換圖時記得一起改。
+     config.js 若有設 BANNERS 會以那邊為準。 */
+  var HERO_BANNERS = [
+    'assets/fju2026.jpg',
+    'assets/fju2026b.jpg'
+  ];
+
   function setRefresh(fn, ms) {
     clearRefresh();
     // 分頁被切到背景時不打後端，省 Apps Script 的執行配額
@@ -33,7 +41,14 @@ window.App = (function () {
 
   function showHero(on) {
     var hero = document.getElementById('hero');
-    if (hero) hero.hidden = !on;
+    if (!hero) return;
+    hero.hidden = !on;
+    if (!on || hero.__built) return;
+    hero.__built = true;
+    var cfg = window.APP_CONFIG || {};
+    var list = cfg.BANNERS || HERO_BANNERS;
+    hero.innerHTML = UI.bannerHTML(list, (cfg.EVENT_TITLE || '活動') + ' 主視覺');
+    UI.initSlideshows(hero);
   }
 
   /**
