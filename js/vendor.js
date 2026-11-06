@@ -5,7 +5,7 @@
 window.VendorView = (function () {
 
   var esc = UI.esc;
-  var state = { code: null, booth: null, tab: 'info', photos: [], slots: [] };
+  var state = { code: null, booth: null, tab: 'info', photos: [], slots: [], stats: null };
 
   /* ================= 進入點 ================= */
 
@@ -14,7 +14,7 @@ window.VendorView = (function () {
     if (saved) {
       app.innerHTML = UI.loadingHTML('登入中…');
       API.vendorLogin(saved)
-        .then(function (res) { enter(app, saved, res.booth); })
+        .then(function (res) { enter(app, saved, res.booth, res.stats); })
         .catch(function () { UI.store('vendorCode', null); renderLogin(app); });
     } else {
       renderLogin(app);
@@ -46,7 +46,7 @@ window.VendorView = (function () {
       API.vendorLogin(code)
         .then(function (res) {
           UI.store('vendorCode', code);
-          enter(app, code, res.booth);
+          enter(app, code, res.booth, res.stats);
         })
         .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
     }
@@ -55,9 +55,10 @@ window.VendorView = (function () {
     input.onkeydown = function (e) { if (e.key === 'Enter') go(); };
   }
 
-  function enter(app, code, booth) {
+  function enter(app, code, booth, stats) {
     state.code = code;
     state.booth = booth;
+    if (stats) state.stats = stats;
     state.photos = (booth.photos || []).slice();
     state.slots = (booth.slots || []).map(function (s) {
       var parts = (s.start && s.end) ? { start: s.start, end: s.end } : UI.splitLabel(s.label);
@@ -134,7 +135,7 @@ window.VendorView = (function () {
     var b = state.booth;
     App.setLogout(function () {
       UI.store('vendorCode', null);
-      state = { code: null, booth: null, tab: 'info', photos: [], slots: [] };
+      state = { code: null, booth: null, tab: 'info', photos: [], slots: [], stats: null };
       App.setLogout(null);
       renderLogin(app);
     }, '登出');
@@ -146,6 +147,7 @@ window.VendorView = (function () {
         '<p class="sub">攤位代碼 <span class="code-chip">' + esc(b.code) + '</span>' +
         (b.closed ? '　<span class="tag tag-danger">已停止報名</span>' : '') + '</p>' +
       '</div>' +
+      statBar() +
       '<div class="nav mb" style="margin-left:0">' +
         '<a href="javascript:void 0" data-tab="info" class="' + (state.tab === 'info' ? 'active' : '') + '">攤位設定</a>' +
         '<a href="javascript:void 0" data-tab="signups" class="' + (state.tab === 'signups' ? 'active' : '') + '">報名名單</a>' +
@@ -161,6 +163,51 @@ window.VendorView = (function () {
 
     if (state.tab === 'info') paintInfo(app);
     else paintSignups(app);
+  }
+
+  /** 把報名數與名額從目前的時段資料加總起來 */
+  function totals() {
+    var slots = (state.booth && state.booth.slots) || [];
+    return {
+      taken: slots.reduce(function (a, s) { return a + (Number(s.taken) || 0); }, 0),
+      capacity: slots.reduce(function (a, s) { return a + (Number(s.capacity) || 0); }, 0),
+      slotCount: slots.length
+    };
+  }
+
+  function pct(a, b) {
+    if (!b) return '—';
+    return Math.round(a / b * 100) + '%';
+  }
+
+  /**
+   * 頁面最上面那排數字。
+   *   瀏覽人數  有多少不同的人點進這一攤（同一個人重複看只算一次）
+   *   報名率    這些人裡面有多少真的報名了
+   *   名額使用  已經報名的人數 ÷ 總名額
+   */
+  function statBar() {
+    var st = state.stats;
+    if (!st) return '';
+    var b = state.booth;
+    var t = totals();
+
+    var cells = [
+      ['' + st.people, '本攤瀏覽人數', st.views + ' 次瀏覽'],
+      ['' + st.sitePeople, '全站瀏覽人數', st.siteViews + ' 次瀏覽']
+    ];
+    if (!b.infoOnly) {
+      cells.splice(1, 0,
+        [t.taken + ' / ' + t.capacity, '報名 / 名額', '名額使用 ' + pct(t.taken, t.capacity)],
+        [pct(t.taken, st.people), '報名率', '看過的人有多少報名']);
+    }
+
+    return '<div class="stat-grid mb">' +
+      cells.map(function (c) {
+        return '<div class="stat"><b>' + esc(c[0]) + '</b><span>' + esc(c[1]) + '</span>' +
+          (c[2] ? '<span class="stat-note">' + esc(c[2]) + '</span>' : '') + '</div>';
+      }).join('') +
+    '</div>';
   }
 
   /* ================= 分頁：攤位設定 ================= */
@@ -521,7 +568,7 @@ window.VendorView = (function () {
         })
           .then(function (res) {
             UI.ok('已儲存');
-            enter(app, state.code, res.booth);
+            enter(app, state.code, res.booth, res.stats);
           })
           .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
       }
@@ -556,25 +603,44 @@ window.VendorView = (function () {
     body.innerHTML = UI.loadingHTML('載入報名名單…');
 
     API.vendorSignups(state.code)
-      .then(function (res) { paint(res); })
+      .then(function (res) {
+        if (res.stats) state.stats = res.stats;   // 順便把瀏覽數更新成最新的
+        paint(res);
+      })
       .catch(function (e) { body.innerHTML = UI.errorHTML(e.message); });
 
     function paint(res) {
       var totalCap = res.slots.reduce(function (a, s) { return a + s.capacity; }, 0);
+      var st = state.stats;
 
       body.innerHTML =
-        '<div class="stat-grid mb">' +
-          '<div class="stat"><b>' + res.total + '</b><span>目前報名人數</span></div>' +
-          '<div class="stat"><b>' + totalCap + '</b><span>總名額</span></div>' +
-          '<div class="stat"><b>' + res.slots.length + '</b><span>時段數</span></div>' +
-        '</div>' +
+        /* 報名人數、名額使用、報名率在頁面最上面那排已經有了，這裡不重複 */
+        '<p class="muted small mb" style="margin-top:0">' +
+          '共 ' + res.slots.length + ' 個時段，' + res.total + ' / ' + totalCap + ' 人報名' +
+          (st ? '，' + st.people + ' 人看過這一攤' : '') + '。</p>' +
         '<div class="btn-row mb">' +
           '<button class="btn btn-ghost btn-sm" id="expCsv">⬇ 匯出 CSV</button>' +
           '<button class="btn btn-ghost btn-sm" id="refreshSignups">↻ 重新整理</button>' +
         '</div>' +
+        '<div id="vendorChart" class="mb"></div>' +
         (res.total === 0
           ? '<div class="card">' + UI.emptyHTML('📋', '還沒有人報名', '把攤位分享給玩家吧') + '</div>'
           : res.slots.map(slotBlock).join(''));
+
+      /* 各時段的報名長條圖（跟總召後台看到的是同一種圖） */
+      if (res.slots.length) {
+        Charts.bar(document.getElementById('vendorChart'), {
+          title: '各時段報名人數',
+          sub: '橫軸為時段，縱軸為人數。深色是已報名人數，淺色是該時段的名額上限。',
+          alt: true,
+          data: res.slots.map(function (s) {
+            return {
+              label: s.label, value: s.people.length, capacity: s.capacity,
+              note: s.closed ? '（已停止）' : (s.people.length >= s.capacity ? '（額滿）' : '')
+            };
+          })
+        });
+      }
 
       document.getElementById('refreshSignups').onclick = function () { paintSignups(app); };
       document.getElementById('expCsv').onclick = function () {
