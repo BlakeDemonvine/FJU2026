@@ -939,7 +939,7 @@ td.num { font-variant-numeric: tabular-nums; }
   }
   /* 沒有攤位、或還沒放地圖的時候就不要硬撐成一個畫面高 */
   .home-fit.is-empty, .home-fit.no-map { display: block; height: auto; }
-  .home-fit.no-map .booth-thumb { aspect-ratio: 16 / 10; flex: none; }
+  .home-fit.no-map .booth-thumb { aspect-ratio: 16 / 10; height: auto; flex: none; }
 
   /* 地圖：窗格壓扁成整個寬度的一條，只占這一塊的三成四，
      剩下的高度全部讓給攤位卡。地圖照片本身的比例不變 ——
@@ -962,11 +962,18 @@ td.num { font-variant-numeric: tabular-nums; }
      空間真的不夠時照片會先被壓縮（flex-shrink），不會把文字擠掉。 */
   /* 照片用 16:9，看起來不會太扁。每張卡同寬 → 照片也一定同高。
      高度真的不夠時才會被壓縮（有 min-height 擋著），文字永遠優先。 */
+  /* 照片 16:9。
+     這裡刻意「直接算出高度」而不是用 aspect-ratio：
+     aspect-ratio 放在會被壓縮的 flex 項目上時，Safari 會連寬度一起縮，
+     照片右邊就會空一塊（Chrome 不會，所以電腦上看不出來）。
+     高度直接從卡片寬度算，寬度就永遠是滿的。
+     後面那個 min(...) 是給 iPhone SE 這種很矮的螢幕用的：
+     照片最多占一個畫面的 28%，其餘留給介紹文字。 */
   .booth-thumb {
-    aspect-ratio: 16 / 9; flex: 0 1 auto; min-height: 84px;
-    /* 螢幕很矮的手機（iPhone SE 這種）照片不要吃掉將近一半的卡片，
-       超過的部分裁掉一點，換幾行介紹文字回來 */
-    max-height: calc(var(--fit-h) * 0.28);
+    aspect-ratio: auto; flex: 0 1 auto; min-height: 84px;
+    height: min(calc((var(--card-w, 320px) - 2px) * 0.5625), calc(var(--fit-h) * 0.28));
+    /* 寫死 100%，任何瀏覽器都不會再自己把寬度算小 */
+    width: 100%;
   }
   /* 這裡不要寫 min-height: 0 —— 寫了的話空間不夠時整個內文區會被壓扁，
      標籤那排就會掉到卡片外面。讓它保持「最少要放得下編號＋標題＋標籤」，
