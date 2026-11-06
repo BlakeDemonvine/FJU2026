@@ -96,8 +96,11 @@ window.MapView = (function () {
       var y1 = bounds.y1 / 100 * st.natH - padY;
       var y2 = bounds.y2 / 100 * st.natH + padY;
       var bw = Math.max(1, x2 - x1), bh = Math.max(1, y2 - y1);
-      // 一律「把所有標記完整放進畫面」—— 一打開就能看到全部攤位，要細節再自己放大
-      var k = clamp(Math.min(s.w / bw, s.h / bh), st.kMin, st.kMax);
+      /* 以「標記範圍剛好填滿寬度」為預設倍率。
+         窗格夠高的時候這就等於把全部標記放進畫面（跟以前一樣）；
+         窗格被壓扁的時候（手機首頁）地圖不會跟著縮小，而是上下超出去，
+         使用者用手指往上下滑就能看到其他區域。 */
+      var k = clamp(s.w / bw, st.kMin, st.kMax);
       var cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
       return { k: k, tx: s.w / 2 - cx * k, ty: s.h / 2 - cy * k };
     }
@@ -111,6 +114,9 @@ window.MapView = (function () {
       st.ty = h <= s.h ? (s.h - h) / 2 : clamp(st.ty, s.h - h, 0);
     }
 
+    /** 窗格目前的尺寸（apply 裡面要用，另外包一層避免重複量） */
+    function s2() { return size(); }
+
     function apply() {
       clampT();
       pan.style.transform = 'translate(' + st.tx + 'px,' + st.ty + 'px) scale(' + st.k + ')';
@@ -121,6 +127,10 @@ window.MapView = (function () {
          使用者自己放大之後才接管單指拖曳。 */
       var zoomed = st.k > st.kDef * 1.02;
       stage.classList.toggle('is-zoomed', zoomed);
+      /* 預設視角就已經超出窗格（扁窗格）時也要能單指拖曳，
+         不然使用者根本看不到超出去的那一半地圖。 */
+      var over = st.natW * st.k > s2().w + 1 || st.natH * st.k > s2().h + 1;
+      stage.classList.toggle('is-pannable', over);
       stage.dataset.zoom = st.k.toFixed(2);
       emit('change', st);
     }
@@ -191,7 +201,9 @@ window.MapView = (function () {
 
       /* 還在預設視角、而且是手指的時候不要接管拖曳 —— 單指要留給頁面捲動。
          但還是要記錄下來，不然「點一下」這個動作會收不到（總召定位要用）。 */
-      var noPan = ev.pointerType === 'touch' && !stage.classList.contains('is-zoomed');
+      var noPan = ev.pointerType === 'touch' &&
+        !stage.classList.contains('is-zoomed') &&
+        !stage.classList.contains('is-pannable');
       drag = {
         id: ev.pointerId,
         sx: ev.clientX, sy: ev.clientY,
