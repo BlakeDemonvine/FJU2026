@@ -100,11 +100,12 @@ window.PlayerView = (function () {
           '</div>' +
           '<figcaption class="map-cap">' +
             '<span class="map-cap-title">🗺️ 園遊會攤位地圖</span>' +
+            /* 「攤位 1 / 16」就放在這一列，不要自己再占掉一行的高度 */
+            '<div class="rail-island" id="railIsland" hidden></div>' +
             '<span class="muted" id="mapHint">點攤位標記可以直接前往</span>' +
             MapView.controlsHTML(true, 'map-ctrl-bar') + '</figcaption>' +
         '</figure>' +
         '<div id="boothList">' + UI.loadingHTML('正在載入攤位…') + '</div>' +
-        '<div class="rail-island" id="railIsland" hidden></div>' +
       '</section>';
 
     var mapImg = document.getElementById('mapImg');
@@ -379,6 +380,7 @@ window.PlayerView = (function () {
 
         var cur = list[best];
         island.hidden = false;
+        island.parentNode.classList.add('has-island');
         island.innerHTML =
           '<span class="rail-no">攤位</span>' +
           '<span>' + (best + 1) + ' / ' + list.length + '</span>';
