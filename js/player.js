@@ -83,6 +83,8 @@ window.PlayerView = (function () {
   function renderHome(app) {
     var mapSrc = (window.APP_CONFIG && window.APP_CONFIG.MAP) || 'assets/map.png';
 
+    API.track('home');          // 記一次「有人看了這個網站」
+
     /* .home-fit 是「地圖在上、攤位在下」的那一整塊。
        手機上它剛好等於一個畫面的高度，往下滑會自動停在這裡（見 style.css 的 scroll-snap）。 */
     app.innerHTML =
@@ -573,6 +575,7 @@ window.PlayerView = (function () {
 
   function renderBooth(app, boothId) {
     var painted = false;
+    API.track('booth', boothId);   // 記一次「有人看了這一攤」
     app.innerHTML = UI.loadingHTML('載入攤位資訊…');
 
     function load(background) {
@@ -682,6 +685,7 @@ window.PlayerView = (function () {
         });
       })).then(function (list) {
         detail = list;
+        list.forEach(function (b) { API.track('booth', b.boothId); });
         paint();
       }).catch(function (e) {
         if (background) return;
