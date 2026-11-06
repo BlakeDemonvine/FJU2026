@@ -84,6 +84,8 @@ window.AdminView = (function () {
         '<div class="stat"><b>' + d.stats.configuredCount + '</b><span>已設定上線</span></div>' +
         '<div class="stat"><b>' + d.stats.signupCount + '</b><span>有效報名</span></div>' +
         '<div class="stat"><b>' + d.stats.cancelledCount + '</b><span>已取消</span></div>' +
+        '<div class="stat"><b>' + (d.stats.sitePeople || 0) + '</b><span>網站瀏覽人數</span>' +
+          '<span class="stat-note">' + (d.stats.siteViews || 0) + ' 次瀏覽</span></div>' +
       '</div>' +
 
       '<div class="nav mb" style="margin-left:0">' +
@@ -392,7 +394,7 @@ window.AdminView = (function () {
         (d.booths.length
           ? '<div class="table-wrap"><table><thead><tr>' +
               '<th>編號</th><th>代碼</th><th>攤位名稱</th><th>類型</th><th>狀態</th>' +
-              '<th>費用</th><th>報名 / 名額</th><th>時段</th><th>名單</th><th>操作</th>' +
+              '<th>費用</th><th>瀏覽</th><th>報名 / 名額</th><th>時段</th><th>名單</th><th>操作</th>' +
             '</tr></thead><tbody>' + d.booths.map(boothRow).join('') + '</tbody></table></div>'
           : UI.emptyHTML('🎪', '還沒有任何攤位', '先在上面填攤位編號產生一組代碼給攤商')) +
       '</div>';
@@ -429,11 +431,12 @@ window.AdminView = (function () {
 
     document.getElementById('expBooths').onclick = function () {
       var rows = [['攤位編號', '代碼', '攤位名稱', '類型', '狀態', '參加費用',
-                   '已報名', '總名額', '時段數', '建立時間']];
+                   '瀏覽人數', '瀏覽次數', '已報名', '總名額', '時段數', '建立時間']];
       d.booths.forEach(function (b) {
         rows.push([b.boothNo, b.code, b.name, b.infoOnly ? '只做介紹' : '需要報名',
                    b.infoOnly ? '自由參觀' : (b.closed ? '停止報名' : (b.configured ? '開放中' : '未設定')),
                    b.infoOnly ? '' : (UI.hasPrice(b.price) ? UI.priceText(b.price) : '未填'),
+                   b.people || 0, b.views || 0,
                    b.infoOnly ? '' : b.taken, b.infoOnly ? '' : b.capacity,
                    b.infoOnly ? '' : b.slots.length, b.createdAt]);
       });
@@ -512,6 +515,15 @@ window.AdminView = (function () {
     });
   }
 
+  /** 瀏覽欄：人數、次數，以及這一攤佔所有攤位瀏覽的比例 */
+  function viewCell(b) {
+    var total = (state.data && state.data.stats && state.data.stats.boothViews) || 0;
+    var share = total ? Math.round((b.views || 0) / total * 100) : 0;
+    if (!b.views) return '<span class="muted">0</span>';
+    return '<b>' + (b.people || 0) + '</b> 人' +
+      '<span class="muted small"> · ' + b.views + ' 次' + (total ? '（' + share + '%）' : '') + '</span>';
+  }
+
   function boothRow(b) {
     var status = b.infoOnly ? '<span class="tag tag-brand">自由參觀</span>'
       : !b.configured ? '<span class="tag tag-muted">未設定</span>'
@@ -537,6 +549,7 @@ window.AdminView = (function () {
       '<td class="num">' + (b.infoOnly ? '<span class="muted">—</span>'
         : UI.hasPrice(b.price) ? esc(UI.priceText(b.price))
         : '<span class="tag tag-warn">未填</span>') + '</td>' +
+      '<td class="num">' + viewCell(b) + '</td>' +
       '<td class="num">' + (b.infoOnly ? '<span class="muted">—</span>' : b.taken + ' / ' + b.capacity) + '</td>' +
       '<td class="num">' + (b.infoOnly ? '<span class="muted">—</span>'
         : '<button class="btn btn-ghost btn-sm" data-slots="' + esc(b.boothId) + '">' + b.slots.length + ' 個</button>') + '</td>' +
@@ -641,6 +654,25 @@ window.AdminView = (function () {
         };
       })
     });
+
+    /* 各攤位被看了幾次（包含只做介紹的攤位，它們沒有報名可以看） */
+    var viewed = d.booths.filter(function (b) { return b.configured; });
+    if (viewed.some(function (b) { return b.views > 0; })) {
+      Charts.bar(charts, {
+        title: '各攤位瀏覽次數',
+        sub: '橫軸為攤位，縱軸為被打開的次數（同一個人重複看會重複計算）。',
+        valueName: '瀏覽次數',
+        unit: '次',
+        data: viewed.map(function (b) {
+          var total = d.stats.boothViews || 0;
+          return {
+            label: b.boothNo || b.name, value: b.views || 0,
+            note: b.name + '　' + (b.people || 0) + ' 人看過' +
+                  (total ? '　佔 ' + Math.round((b.views || 0) / total * 100) + '%' : '')
+          };
+        })
+      });
+    }
 
     /* 各攤位：每個時段的報名人數 */
     live.forEach(function (b) {
