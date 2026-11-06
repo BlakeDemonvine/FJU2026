@@ -6,6 +6,32 @@ window.PlayerView = (function () {
 
   var esc = UI.esc;
 
+  /* 報名總開關（總召後台控制）。後端每次回清單／詳情都會帶，
+     這裡存一份給畫面用；真正擋下來的還是後端。 */
+  var gate = { open: true, msg: '報名還沒有開始，請等候總召公告開放時間。' };
+
+  function readGate(res) {
+    if (!res) return;
+    if (res.signupOpen !== undefined) gate.open = res.signupOpen !== false;
+    if (res.signupClosedMsg) gate.msg = res.signupClosedMsg;
+  }
+
+  /** 按下報名但還沒開放時跳的提示（只有一顆「知道了」） */
+  function gatePopup() {
+    UI.modal(
+      '<h3>報名尚未開放</h3>' +
+      '<p class="muted">' + UI.nl2br(gate.msg) + '</p>' +
+      '<div class="btn-row"><button class="btn" data-ok>知道了</button></div>',
+      function (root, close) { root.querySelector('[data-ok]').onclick = close; }
+    );
+  }
+
+  /** 還沒開放報名時，頁面最上面那條提示 */
+  function gateNotice() {
+    if (gate.open) return '';
+    return '<div class="notice notice-warn gate-notice">⏳ ' + esc(gate.msg) + '</div>';
+  }
+
   /* 頂列的高度（字體載入後、轉向後都可能變），量出來寫進 CSS，
      首頁那一塊才算得出「剛好一個畫面」要多高。 */
   function measureChrome() {
@@ -308,7 +334,7 @@ window.PlayerView = (function () {
          圖片也會重新解碼閃一下。 */
       var sig = JSON.stringify(list.map(function (b) {
         return [b.boothId, b.boothNo, b.name, b.description, b.duration,
-                b.totalRemaining, b.slotCount, b.allClosed, b.mapX, b.mapY, b.price,
+                b.totalRemaining, b.slotCount, b.allClosed, b.mapX, b.mapY, b.price, gate.open,
                 (b.photos && b.photos[0] && (b.photos[0].fileId || b.photos[0].url)) || ''];
       }));
       if (sig === lastSignature && document.getElementById('boothRail')) {
@@ -437,9 +463,11 @@ window.PlayerView = (function () {
          需要報名的攤位右邊那個標籤顯示費用（攤商還沒填的話就不顯示）。 */
       var tags = b.infoOnly
         ? '<span class="tag tag-brand">🎪 自由參觀</span>'
-        : (b.allClosed
-            ? '<span class="tag tag-danger">已截止報名</span>'
-            : '<span class="tag tag-ok">尚餘 ' + b.totalRemaining + ' 個名額</span>') +
+        : (!gate.open
+            ? '<span class="tag tag-amber">⏳ 尚未開放報名</span>'
+            : b.allClosed
+              ? '<span class="tag tag-danger">已截止報名</span>'
+              : '<span class="tag tag-ok">尚餘 ' + b.totalRemaining + ' 個名額</span>') +
           UI.priceTag(b.price);
 
       return '<a class="booth-card' + (!b.infoOnly && b.allClosed ? ' is-closed' : '') +
@@ -458,6 +486,7 @@ window.PlayerView = (function () {
 
     function load(background) {
       return API.listBooths().then(function (res) {
+        readGate(res);
         all = res.booths || [];
         UI.cacheSet('booths', all);
         paint();
@@ -539,8 +568,9 @@ window.PlayerView = (function () {
     var right;
     if (s.closed) right = '<span class="tag tag-muted">已停止報名</span>';
     else if (s.remaining <= 0) right = '<span class="tag tag-danger">名額已滿</span>';
-    else right = '<button class="btn" data-signup="' + esc(s.id) + '" ' +
-                 'data-booth="' + esc(boothId) + '">我要報名</button>';
+    else right = '<button class="btn' + (gate.open ? '' : ' btn-ghost') + '" data-signup="' + esc(s.id) + '" ' +
+                 'data-booth="' + esc(boothId) + '">' +
+                 (gate.open ? '我要報名' : '尚未開放報名') + '</button>';
 
     return '<div class="slot-row ' + cls + '">' +
       '<div style="flex:1;min-width:190px">' +
@@ -558,6 +588,7 @@ window.PlayerView = (function () {
   function bindSignups(root, list, reload) {
     UI.$$('[data-signup]', root).forEach(function (btn) {
       btn.onclick = function () {
+        if (!gate.open) return gatePopup();
         var b = list.filter(function (x) { return String(x.boothId) === btn.dataset.booth; })[0];
         if (!b) return;
         var slot = (b.slots || []).filter(function (sl) { return String(sl.id) === btn.dataset.signup; })[0];
@@ -582,6 +613,7 @@ window.PlayerView = (function () {
 
     function load(background) {
       return API.getBooth(boothId).then(function (res) {
+        readGate(res);
         UI.cacheSet('booth_' + boothId, res.booth);
         paint(res.booth);
       }).catch(function (e) {
@@ -607,6 +639,7 @@ window.PlayerView = (function () {
           '<h1>' + esc(b.name) + '</h1>' +
           subLine(b, dur) +
         '</div>' +
+        (b.infoOnly ? '' : gateNotice()) +
         /* 同一個位置還有別攤的話，給一個一次看完的入口 */
         (sibs.length
           ? '<a class="notice notice-info same-spot" href="#/area/' +
@@ -661,6 +694,7 @@ window.PlayerView = (function () {
           '<h1>攤位 ' + esc(key) + '</h1>' +
           '<p class="sub">這個位置有 ' + detail.length + ' 攤，往下滑可以一次看完，各自報名。</p>' +
         '</div>' +
+        (detail.every(function (b) { return b.infoOnly; }) ? '' : gateNotice()) +
         detail.map(function (b) { return boothSection(b, { heading: true }); }).join('');
 
       UI.initSlideshows(app);
@@ -682,6 +716,7 @@ window.PlayerView = (function () {
       }
       return Promise.all(rows.map(function (b) {
         return API.getBooth(b.boothId).then(function (res) {
+          readGate(res);
           UI.cacheSet('booth_' + b.boothId, res.booth);
           return res.booth;
         });
