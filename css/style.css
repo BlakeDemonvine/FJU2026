@@ -111,7 +111,7 @@ p { margin: 0 0 .8em; }
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   display: flex; align-items: center; gap: 14px;
 }
-.brand { display: flex; align-items: center; gap: 9px; color: var(--text); text-decoration: none; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.brand { display: flex; align-items: center; color: var(--text); text-decoration: none; flex: none; }
 .brand:hover { text-decoration: none; }
 .brand-mark { font-size: 1.45rem; line-height: 1; flex: none; display: inline-block; }
 /* 報名數變動時，左上角的圖示長大一下 */
@@ -123,7 +123,11 @@ p { margin: 0 0 .8em; }
   100% { transform: scale(1)   rotate(0deg); }
 }
 @media (prefers-reduced-motion: reduce) { .brand-mark.pop { animation: none; } }
-.brand-text { min-width: 0; }
+.brand-text {
+  display: block; min-width: 0; flex: 1 1 auto; overflow: hidden;
+  color: var(--text); text-decoration: none; margin-left: -5px;
+}
+.brand-text:hover { text-decoration: none; }
 .brand-text strong {
   font-size: 1rem; font-weight: 800; letter-spacing: -.01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
@@ -823,9 +827,21 @@ td.num { font-variant-numeric: tabular-nums; }
   .slot-row { gap: 8px; }
 }
 
-/* 窄螢幕：標題讓位給選單，主視覺與各頁標題已經說明是什麼活動 */
+/* 窄螢幕：選單本來就把一整行佔滿了，所以把標題換到第二行，整行都給它用。
+   頂列會因此變高，但高度是 player.js 量出來寫進 --topbar-h 的，
+   首頁「剛好一個畫面」那塊會自己跟著縮，不用另外調。 */
 @media (max-width: 540px) {
-  .brand-text { display: none; }
+  .topbar-inner { flex-wrap: wrap; row-gap: 5px; }
+  .brand-text { order: 3; flex: 1 0 100%; margin-left: 0; }
+  .brand-text strong { font-size: .82rem; }
+  .brand-sub { font-size: .67rem; }
+}
+/* 很窄的手機（320px 這種）：選單與登出再縮一點，第一行才塞得下，
+   不然登出會被擠成第三行。 */
+@media (max-width: 360px) {
+  .topbar-inner { gap: 7px; }
+  .nav a { padding: 6px 7px; font-size: .76rem; }
+  .logout-btn { padding: 5px 10px; font-size: .76rem; }
 }
 
 /* ---------- 窄螢幕：攤位改成左右滑 ---------- */
