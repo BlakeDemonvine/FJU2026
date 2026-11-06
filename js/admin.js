@@ -88,6 +88,8 @@ window.AdminView = (function () {
           '<span class="stat-note">' + (d.stats.siteViews || 0) + ' 次瀏覽</span></div>' +
       '</div>' +
 
+      signupSwitch(d) +
+
       '<div class="nav mb" style="margin-left:0">' +
         '<a href="javascript:void 0" data-tab="booths" class="' + (state.tab === 'booths' ? 'active' : '') + '">攤位管理</a>' +
         '<a href="javascript:void 0" data-tab="map" class="' + (state.tab === 'map' ? 'active' : '') + '">地圖定位</a>' +
@@ -112,9 +114,89 @@ window.AdminView = (function () {
       };
     });
 
+    bindSignupSwitch(app);
+
     if (state.tab === 'booths') paintBooths(app);
     else if (state.tab === 'map') paintMap(app);
     else paintSignups(app);
+  }
+
+  /* ================= 報名總開關 =================
+   * 關起來的時候，玩家端整個不能報名（按下去會跳出下面那句話），
+   * 攤商還是可以照常設定攤位，總召也看得到所有資料。
+   */
+
+  function signupSwitch(d) {
+    var open = d.stats.signupOpen !== false;
+    var msg = d.stats.signupClosedMsg || '';
+
+    return '<div class="card signup-gate' + (open ? ' is-open' : '') + '">' +
+      '<div class="gate-row">' +
+        '<div class="gate-text">' +
+          '<h2>' + (open ? '✅ 報名進行中' : '⏸ 報名尚未開放') + '</h2>' +
+          '<p class="muted small">' + (open
+            ? '玩家現在可以報名。按下開關就會立刻暫停，已經報名的資料不受影響。'
+            : '玩家按報名會看到下面那句話，報名不會成立。等到要開放時再把開關打開。') + '</p>' +
+        '</div>' +
+        '<label class="switch gate-switch" title="打開才開放報名">' +
+          '<input type="checkbox" id="gateToggle"' + (open ? ' checked' : '') + '>' +
+          '<span id="gateLabel">' + (open ? '開放報名' : '暫停中') + '</span>' +
+        '</label>' +
+      '</div>' +
+      '<div class="field" style="margin:12px 0 0">' +
+        '<label for="gateMsg">暫停期間要顯示給玩家看的訊息</label>' +
+        '<div class="gate-msg-row">' +
+          '<input type="text" id="gateMsg" maxlength="200" value="' + esc(msg) + '" ' +
+            'placeholder="例：報名將於 11/10 中午 12:00 開放">' +
+          '<button class="btn btn-ghost btn-sm" id="gateMsgSave" type="button">儲存文字</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function bindSignupSwitch(app) {
+    var box = document.getElementById('gateToggle');
+    if (!box) return;
+
+    function send(open, btn, okMsg) {
+      var payload = { adminCode: state.code, open: open };
+      var msgEl = document.getElementById('gateMsg');
+      if (msgEl) payload.message = msgEl.value;
+      if (btn) UI.busy(btn, true, '儲存中…');
+      return API.adminSetSignup(payload)
+        .then(function (res) {
+          state.data.stats.signupOpen = res.signupOpen;
+          state.data.stats.signupClosedMsg = res.signupClosedMsg;
+          UI.ok(okMsg || res.message);
+          paint(app);
+        })
+        .catch(function (e) {
+          if (btn) UI.busy(btn, false);
+          box.checked = !open;      // 失敗就把開關扳回去
+          UI.err(e.message);
+        });
+    }
+
+    box.onchange = function () {
+      var open = box.checked;
+      if (open) return send(true);
+      // 關掉是比較大的動作，先確認一次
+      box.checked = true;
+      UI.confirm({
+        title: '要暫停報名嗎？',
+        message: '暫停之後玩家按報名會跳出提示，報名不會成立。\n已經報過名的資料完全不受影響，隨時可以再打開。',
+        confirmText: '暫停報名',
+        danger: true
+      }).then(function (yes) {
+        if (!yes) return;
+        box.checked = false;
+        send(false);
+      });
+    };
+
+    document.getElementById('gateMsgSave').onclick = function () {
+      send(state.data.stats.signupOpen !== false, this, '已儲存訊息');
+    };
   }
 
   /* ================= 地圖定位 ================= */
