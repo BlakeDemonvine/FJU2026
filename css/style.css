@@ -461,6 +461,18 @@ p { margin: 0 0 .8em; }
 }
 .tag-ok { background: var(--ok-soft); color: var(--ok); }
 .tag-warn { background: var(--warn-soft); color: var(--warn); }
+
+/* 總召後台的報名總開關 */
+.signup-gate { border-left: 4px solid var(--warn); }
+.signup-gate.is-open { border-left-color: var(--ok); }
+.signup-gate .gate-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.signup-gate .gate-text { flex: 1 1 260px; min-width: 0; }
+.signup-gate .gate-text h2 { margin: 0 0 4px; }
+.signup-gate .gate-switch { flex: none; }
+.signup-gate .gate-msg-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.signup-gate .gate-msg-row input { flex: 1 1 240px; min-width: 0; }
+/* 玩家端：還沒開放報名的提示 */
+.gate-notice { margin-bottom: 14px; }
 /* 表格最上面的合計列：黏在表頭下面，捲動的時候一直看得到 */
 tbody tr.sum-row > th, tbody tr.sum-row > td {
   position: sticky; top: var(--thead-h, 0px); z-index: 2;
