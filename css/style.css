@@ -186,6 +186,9 @@ p { margin: 0 0 .8em; }
 }
 /* 字級跟著視窗縮放；單位名稱本身不斷行，整行放不下時才整段換行 */
 .footer-line { font-size: clamp(11px, 2.7vw, 13px); }
+@media (max-width: 720px) {
+  .footer { padding-top: 13px; line-height: 1.75; }
+}
 .footer-line strong, .footer-line .sep { white-space: nowrap; }
 .footer strong { color: var(--text); font-weight: 700; }
 .footer .sep { color: var(--amber); margin: 0 6px; }
@@ -880,7 +883,7 @@ td.num { font-variant-numeric: tabular-nums; }
     margin-inline: calc(var(--app-gutter) * -1);
     /* 前後各留半張卡的空間，第一張與最後一張才滑得到正中間
        （100% 是扣掉 .app 內距後的寬度，所以要補回兩邊的 gutter） */
-    padding: 2px calc((100% + var(--app-gutter) * 2 - var(--card-w)) / 2) 10px;
+    padding: 2px calc((100% + var(--app-gutter) * 2 - var(--card-w)) / 2) 4px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
@@ -892,6 +895,8 @@ td.num { font-variant-numeric: tabular-nums; }
 
   /* 手機版把各區塊壓緊，地圖和攤位卡才能同時出現在一個畫面裡 */
   .app { padding-bottom: 26px; }
+  /* 攤位首頁已經自己算好「剛好一個畫面」，下面再留內距只會變成一塊空白 */
+  html.snap-home .app { padding-bottom: 0; }
   .hero { margin-top: 12px; }
   .map-card { margin-bottom: 14px; }
   .map-card .map-cap { padding: 6px 8px 6px 12px; font-size: .74rem; min-height: 42px; }
@@ -927,8 +932,8 @@ td.num { font-variant-numeric: tabular-nums; }
   .home-fit {
     /* svh 是「網址列展開時」的高度，是最保守的值：
        不管使用者的瀏覽器工具列是收起還是展開，內容都不會被切掉。
-       留 8px 讓人看得出下面還有東西。 */
-    --fit-h: calc(100svh - var(--topbar-h, 52px) - 8px);
+       留 4px 讓人看得出下面還有東西。 */
+    --fit-h: calc(100svh - var(--topbar-h, 52px) - 4px);
     height: var(--fit-h);
     display: flex; flex-direction: column; gap: 8px;
   }
