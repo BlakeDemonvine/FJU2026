@@ -470,9 +470,13 @@ p { margin: 0 0 .8em; }
 .slide-view { position: relative; width: 100%; height: clamp(240px, 44vw, 460px); overflow: hidden; }
 .slide-view.empty { display: grid; place-items: center; }
 /* 主視覺：兩張圖長寬差很多，用固定框＋模糊底圖，才不會每換一張整頁高度就跳一次 */
-.slideshow.is-banner .slide-view { height: clamp(170px, 44vw, 465px); }
-/* 465px 是「主視覺橫幅在 1120px 版面寬度下剛好填滿」的高度；
-   直式的海報就靠模糊底圖補兩側，換圖的時候版面不會上下跳。 */
+/* 主視覺：高度由 JS 依「目前這張照片的長寬比」算出來，照片剛好填滿整個框，
+   兩側與上下都不會留白。兩張比例不同時高度會平滑地過渡，不會硬跳。
+   還沒量到尺寸之前先用 44vw 撐著，避免版面閃一下。 */
+.slideshow.is-banner .slide-view { height: 44vw; transition: height .42s cubic-bezier(.4,0,.2,1); }
+.slideshow.is-banner.no-anim .slide-view { transition: none; }
+.slideshow.is-banner .slide-img { object-fit: cover; }
+.slideshow.is-banner .slide-bg { display: none; }
 .slide-track {
   display: flex; width: 100%; height: 100%;
   will-change: transform; transform: translate3d(0,0,0);
@@ -624,7 +628,9 @@ td.num { font-variant-numeric: tabular-nums; }
 .stat-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); }
 .stat { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; }
 .stat b { display: block; font-size: 1.7rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
-.stat span { font-size: .78rem; color: var(--text-dim); }
+.stat span { font-size: .78rem; color: var(--text-dim); display: block; }
+/* 第二行的小字：解釋上面那個數字是怎麼算的 */
+.stat .stat-note { font-size: .7rem; color: var(--text-faint); margin-top: 2px; }
 
 /* ---------- 長條圖 ---------- */
 .chart-card { background: var(--surface-chart); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px 14px; box-shadow: var(--shadow-sm); }
@@ -871,6 +877,12 @@ td.num { font-variant-numeric: tabular-nums; }
   .booth-foot { gap: 6px; }
   .tag { font-size: .71rem; padding: 2px 9px; }
   .rail-island { padding: 7px 16px; font-size: .82rem; }
+  /* 統計卡在手機上壓小一點，下面的內容才不會被推太遠 */
+  .stat-grid { gap: 9px; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); }
+  .stat { padding: 10px 12px; }
+  .stat b { font-size: 1.35rem; }
+  .stat span { font-size: .73rem; }
+  .stat .stat-note { font-size: .67rem; }
 
   .slide-view { height: clamp(200px, 52vw, 320px); }
 
