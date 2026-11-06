@@ -290,6 +290,7 @@ window.UI = (function () {
       var dots = $$('.slide-dots button', box);
       var n = slides.length;
       var idx = 0;
+      var banner = box.classList.contains('is-banner');
 
       $$('.slide-img', box).forEach(function (im) { bindImgFallback(im); });
 
@@ -298,10 +299,35 @@ window.UI = (function () {
         if (s) hydrateImg(s.querySelector('.slide-img'));
       }
 
+      /* 主視覺：外框高度 = 目前這張照片的高度（寬度已經是 100%），
+         所以照片剛好填滿，兩側不會有留白。照片還沒載完就先跳過，載完會再叫一次。 */
+      function fitHeight() {
+        if (!banner) return;
+        var im = slides[idx] && slides[idx].querySelector('.slide-img');
+        if (!im || !im.naturalWidth) return;
+        var w = view.clientWidth || box.clientWidth;
+        if (!w) return;
+        view.style.height = (w * im.naturalHeight / im.naturalWidth) + 'px';
+      }
+      if (banner) {
+        box.classList.add('no-anim');            // 第一次定高不要有動畫
+        $$('.slide-img', box).forEach(function (im) {
+          if (im.complete) fitHeight();
+          im.addEventListener('load', fitHeight);
+        });
+        window.addEventListener('resize', function () {
+          box.classList.add('no-anim');
+          fitHeight();
+          setTimeout(function () { box.classList.remove('no-anim'); }, 50);
+        });
+        setTimeout(function () { box.classList.remove('no-anim'); }, 80);
+      }
+
       function apply(animate) {
         track.style.transition = animate ? 'transform .42s cubic-bezier(.4,0,.2,1)' : 'none';
         track.style.transform = 'translate3d(' + (-idx * 100) + '%,0,0)';
         dots.forEach(function (d, k) { d.classList.toggle('active', k === idx); });
+        fitHeight();
       }
 
       function goTo(i, animate) {
