@@ -252,7 +252,8 @@ p { margin: 0 0 .8em; }
   touch-action: pan-y;
   cursor: default;
 }
-.map-stage.is-zoomed { touch-action: none; cursor: grab; }
+.map-stage.is-zoomed,
+.map-stage.is-pannable { touch-action: none; cursor: grab; }
 .map-stage.is-dragging { cursor: grabbing; }
 
 .map-pan {
@@ -457,6 +458,14 @@ p { margin: 0 0 .8em; }
 }
 .tag-ok { background: var(--ok-soft); color: var(--ok); }
 .tag-warn { background: var(--warn-soft); color: var(--warn); }
+/* 表格最上面的合計列：黏在表頭下面，捲動的時候一直看得到 */
+tbody tr.sum-row > th, tbody tr.sum-row > td {
+  position: sticky; top: var(--thead-h, 0px); z-index: 2;
+  background: var(--bg-sunken); border-bottom: 1px solid var(--border-strong);
+  font-weight: 700; white-space: nowrap;
+}
+tbody tr.sum-row > th { text-align: left; }
+tbody tr.sum-row b { font-size: 1.02em; }
 .tag-danger { background: var(--danger-soft); color: var(--danger); }
 .tag-brand { background: var(--brand-soft); color: var(--brand); }
 .tag-amber { background: var(--amber-soft); color: var(--warn); }
@@ -929,12 +938,16 @@ td.num { font-variant-numeric: tabular-nums; }
   .home-fit.no-map .rail-island { margin-top: 10px; }
   .home-fit.no-map .booth-thumb { aspect-ratio: 16 / 10; flex: none; }
 
-  /* 地圖：最多占這一塊的四成二。寬度由圖片比例算出來，所以標記位置永遠對得上 */
+  /* 地圖：窗格壓扁成整個寬度的一條，只占這一塊的三成四，
+     剩下的高度全部讓給攤位卡。地圖照片本身的比例不變 ——
+     看不到的部分用手指上下滑就好（mapview.js 會掛上 .is-pannable）。 */
   .map-card { margin: 0; flex: 0 0 auto; }
-  .map-stage {
-    --map-h: calc(var(--fit-h) * 0.42);
-    max-height: var(--map-h);
-    width: min(100%, calc(var(--map-h) * var(--map-ar)));
+  .home-fit .map-stage:not(.is-full) {
+    --map-h: calc(var(--fit-h) * 0.34);
+    aspect-ratio: auto;
+    height: var(--map-h);
+    width: 100%;
+    max-height: none;
   }
 
   /* 攤位卡吃掉剩下的高度 */
@@ -944,17 +957,31 @@ td.num { font-variant-numeric: tabular-nums; }
 
   /* 照片用固定比例，剩下的高度全部留給簡介 —— 螢幕越高，介紹就看得越多。
      空間真的不夠時照片會先被壓縮（flex-shrink），不會把文字擠掉。 */
-  .booth-thumb { aspect-ratio: 16 / 10; flex: 0 1 auto; min-height: 84px; }
-  .booth-body { flex: 1 1 auto; min-height: 0; }
-  /* 標題不再硬撐兩行的高度：一行的攤位名稱下面就不會空一大塊 */
-  .booth-body h3 { min-height: 0; line-height: 1.3; }
+  /* 一個畫面的版面裡，照片用比較扁的比例，把高度讓給介紹文字 */
+  .booth-thumb { aspect-ratio: 2 / 1; flex: 0 1 auto; min-height: 84px; }
+  /* 這裡不要寫 min-height: 0 —— 寫了的話空間不夠時整個內文區會被壓扁，
+     標籤那排就會掉到卡片外面。讓它保持「最少要放得下編號＋標題＋標籤」，
+     不夠的高度一律從照片身上扣（照片有 min-height 擋著）。 */
+  .booth-body { flex: 1 1 auto; }
+  /* 編號、標題、標籤都不准被壓縮（被壓縮的話文字會溢出來疊到下一段），
+     空間不夠時一律讓簡介自己少顯示幾行。 */
+  .booth-no, .booth-foot { flex: none; }
+  /* 標題固定留兩行的高度：名稱長短不同的攤位，簡介都從同一個位置開始，
+     左右滑過去每一張卡的版面才會一致。 */
+  .booth-body h3 {
+    flex: none; line-height: 1.3;
+    height: calc(2 * 1.3em);
+  }
   .booth-body h3 > span {
     display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
     -webkit-box-orient: vertical; overflow: hidden;
   }
-  /* 簡介吃掉卡片剩下的高度，能顯示幾行就顯示幾行 */
+  /* 簡介吃掉卡片剩下的高度，能顯示幾行就顯示幾行。
+     basis 用 0 而不是 auto 很重要：用 auto 的話「介紹字比較多」的卡片
+     會把照片一起擠小（flex-shrink 是照內容大小分配的），
+     結果每一攤的照片高度都不一樣。basis 0 之後照片一律同高。 */
   .booth-desc {
-    flex: 1 1 auto; min-height: 0;
+    flex: 1 1 0; min-height: 0;
     display: block; -webkit-line-clamp: none; line-clamp: none;
     overflow: hidden;
   }
@@ -971,9 +998,11 @@ td.num { font-variant-numeric: tabular-nums; }
   }
 }
 
-/* 真的很矮的螢幕（例如 iPhone SE）：簡介收成一行 */
+/* 真的很矮的螢幕（例如 iPhone SE）：簡介收成一行，標題也只留一行的高度 */
 @media (max-width: 720px) and (max-height: 620px) {
   .booth-desc { -webkit-line-clamp: 1; line-clamp: 1; }
+  .home-fit .booth-body h3 { height: 1.3em; }
+  .home-fit .booth-body h3 > span { -webkit-line-clamp: 1; line-clamp: 1; }
 }
 
 /* 很窄的手機（320～380px）：名額／時段／時數三個標籤要擠得進同一行，
