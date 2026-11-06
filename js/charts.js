@@ -26,10 +26,20 @@ window.Charts = (function () {
 
   /**
    * 畫一張直條圖。
-   * opts = { title, sub, data:[{label, value, capacity, note}], alt:Boolean }
+   * opts = {
+   *   title, sub, alt:Boolean,
+   *   data: [{ label, value, capacity, note }],
+   *   valueName  深色長條代表什麼（預設「已報名人數」）
+   *   capName    淺色底槽代表什麼（預設「尚未額滿的名額」；沒有名額資料就不顯示）
+   *   unit       數字的單位（預設「人」）
+   * }
    */
   function bar(host, opts) {
     var data = opts.data || [];
+    var valueName = opts.valueName || '已報名人數';
+    var capName = opts.capName || '尚未額滿的名額';
+    var unit = opts.unit === undefined ? ' 人' : (opts.unit ? ' ' + opts.unit : '');
+    var hasCap = data.some(function (d) { return (Number(d.capacity) || 0) > 0; });
 
     var card = document.createElement('div');
     card.className = 'chart-card';
@@ -40,8 +50,10 @@ window.Charts = (function () {
       '</div>' +
       '<div class="chart"></div>' +
       '<div class="chart-legend">' +
-        '<span><i style="background:var(--chart-bar' + (opts.alt ? '-2' : '') + ')"></i>已報名人數</span>' +
-        '<span><i style="background:var(--bg-sunken);border:1px solid var(--border)"></i>尚未額滿的名額</span>' +
+        '<span><i style="background:var(--chart-bar' + (opts.alt ? '-2' : '') + ')"></i>' + esc(valueName) + '</span>' +
+        (hasCap
+          ? '<span><i style="background:var(--bg-sunken);border:1px solid var(--border)"></i>' + esc(capName) + '</span>'
+          : '') +
       '</div>';
 
     var box = card.querySelector('.chart');
@@ -152,7 +164,7 @@ window.Charts = (function () {
           x: padL + offset + band * i, y: padT, width: band, height: plotH + padB - 20, class: 'bar-hit'
         });
         hit.addEventListener('mouseenter', function () {
-          showTip(cx, y(Math.max(val, cap)), (d.label || '') + '：' + val + ' 人' +
+          showTip(cx, y(Math.max(val, cap)), (d.label || '') + '：' + val + unit +
             (cap ? ' / ' + cap + ' 名額' : '') + (d.note ? '　' + d.note : ''));
         });
         hit.addEventListener('mouseleave', hideTip);
@@ -197,7 +209,8 @@ window.Charts = (function () {
     wrapEl.className = 'table-wrap mt';
     wrapEl.innerHTML = '<table><caption class="small muted" style="text-align:left;padding:8px 13px">' +
       esc(opts.title) + '</caption><thead><tr><th>' + esc(opts.categoryHead || '項目') +
-      '</th><th>報名人數</th><th>名額上限</th></tr></thead><tbody>' +
+      '</th><th>' + esc(opts.valueName || '報名人數') + '</th><th>' +
+      esc(opts.capName || '名額上限') + '</th></tr></thead><tbody>' +
       (opts.data || []).map(function (d) {
         return '<tr><td>' + esc(d.label) + '</td><td class="num">' + (d.value || 0) +
           '</td><td class="num">' + (d.capacity || 0) + '</td></tr>';
