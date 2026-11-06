@@ -395,7 +395,8 @@ window.AdminView = (function () {
           ? '<div class="table-wrap"><table><thead><tr>' +
               '<th>編號</th><th>代碼</th><th>攤位名稱</th><th>類型</th><th>狀態</th>' +
               '<th>費用</th><th>瀏覽</th><th>報名 / 名額</th><th>時段</th><th>名單</th><th>操作</th>' +
-            '</tr></thead><tbody>' + d.booths.map(boothRow).join('') + '</tbody></table></div>'
+            '</tr></thead><tbody>' + sumRow(d.booths) +
+              d.booths.map(boothRow).join('') + '</tbody></table></div>'
           : UI.emptyHTML('🎪', '還沒有任何攤位', '先在上面填攤位編號產生一組代碼給攤商')) +
       '</div>';
 
@@ -513,6 +514,40 @@ window.AdminView = (function () {
         );
       };
     });
+  }
+
+  /**
+   * 表格最上面的加總列。只有「需要報名」的攤位才算報名、名額與時段，
+   * 自由參觀的攤位沒有這些數字，混在一起加會看不懂。
+   */
+  function sumRow(booths) {
+    var t = { views: 0, people: 0, taken: 0, capacity: 0, slots: 0, live: 0, info: 0, noPrice: 0 };
+    booths.forEach(function (b) {
+      t.views += b.views || 0;
+      t.people += b.people || 0;
+      if (b.infoOnly) { t.info++; return; }
+      t.live++;
+      t.taken += b.taken || 0;
+      t.capacity += b.capacity || 0;
+      t.slots += (b.slots || []).length;
+      if (!UI.hasPrice(b.price)) t.noPrice++;
+    });
+
+    var pctFull = t.capacity ? Math.round(t.taken / t.capacity * 100) + '%' : '—';
+
+    return '<tr class="sum-row">' +
+      '<th colspan="3">合計　<span class="muted small">' + booths.length + ' 攤（需要報名 ' +
+        t.live + '、自由參觀 ' + t.info + '）</span></th>' +
+      '<td colspan="2"></td>' +
+      '<td class="num">' + (t.noPrice
+        ? '<span class="tag tag-warn">' + t.noPrice + ' 攤未填</span>'
+        : '<span class="muted">—</span>') + '</td>' +
+      '<td class="num"><b>' + t.people + '</b> 人<span class="muted small"> · ' + t.views + ' 次</span></td>' +
+      '<td class="num"><b>' + t.taken + '</b> / ' + t.capacity +
+        '<span class="muted small"> · ' + pctFull + '</span></td>' +
+      '<td class="num"><b>' + t.slots + '</b> 個</td>' +
+      '<td colspan="2"></td>' +
+    '</tr>';
   }
 
   /** 瀏覽欄：人數、次數，以及這一攤佔所有攤位瀏覽的比例 */
