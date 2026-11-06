@@ -122,6 +122,42 @@ window.API = (function () {
       .then(parseBody);
   }
 
+  /* ---------- 瀏覽統計 ----------
+   * 每個瀏覽器存一組固定的 visitorId（算「人數」用），
+   * 同一個人同一個頁面 30 分鐘內只記一次，來回點來點去不會灌水。
+   * 整段都是「送出去就算了」，失敗不影響任何畫面。
+   */
+  var TRACK_GAP_MS = 30 * 60 * 1000;
+
+  function visitorId() {
+    var id = UI.store('visitorId');
+    if (!id) {
+      id = 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      UI.store('visitorId', id);
+    }
+    return id;
+  }
+
+  function trackedRecently(key) {
+    try {
+      var map = JSON.parse(sessionStorage.getItem('fju_tracked') || '{}');
+      if (map[key] && Date.now() - map[key] < TRACK_GAP_MS) return true;
+      map[key] = Date.now();
+      sessionStorage.setItem('fju_tracked', JSON.stringify(map));
+    } catch (e) { /* 無痕模式：就讓它每次都記 */ }
+    return false;
+  }
+
+  var track = function (type, boothId) {
+    try {
+      if (!cfg.GAS_URL || cfg.GAS_URL.indexOf('請貼上') > -1) return;
+      var key = type + ':' + (boothId || '');
+      if (trackedRecently(key)) return;
+      call('track', { type: type, boothId: boothId || '', visitorId: visitorId() })
+        .catch(function () {});
+    } catch (e) {}
+  };
+
   /* ---------- 玩家 ---------- */
   var listBooths      = function ()        { return call('listBooths'); };
   var getBooth        = function (boothId) { return call('getBooth', { boothId: boothId }); };
@@ -160,6 +196,7 @@ window.API = (function () {
     lookupSignups: lookupSignups,
     cancelSignup: cancelSignup,
     vendorLogin: vendorLogin,
+    track: track,
     vendorSave: vendorSave,
     vendorSetPrice: vendorSetPrice,
     vendorUploadPhoto: vendorUploadPhoto,
