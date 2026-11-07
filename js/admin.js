@@ -471,6 +471,10 @@ window.AdminView = (function () {
         '<div class="card-title"><h2>所有攤位（' + d.booths.length + '）</h2>' +
           '<div class="btn-row">' +
             '<button class="btn btn-ghost btn-sm" id="recountBtn">🛠 重新計算名額</button>' +
+            (d.stats.cancelledCount
+              ? '<button class="btn btn-ghost btn-sm" id="purgeBtn">🧹 清除已取消（' +
+                  d.stats.cancelledCount + '）</button>'
+              : '') +
             '<button class="btn btn-ghost btn-sm" id="expBooths">⬇ 匯出攤位清單</button>' +
           '</div></div>' +
         (d.booths.length
@@ -510,6 +514,43 @@ window.AdminView = (function () {
       API.adminRecount(state.code)
         .then(function (res) { UI.busy(btn, false); UI.ok(res.message); load(app); })
         .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
+    };
+
+    /* 清掉「已取消」的紀錄（通常是測試留下來的）。
+       攤位很多時後端會分批處理，這裡照它回傳的 pending 繼續呼叫到清完為止。 */
+    var purgeBtn = document.getElementById('purgeBtn');
+    if (purgeBtn) purgeBtn.onclick = function () {
+      var btn = this;
+      UI.confirm({
+        title: '清除已取消的紀錄？',
+        message: '會把 ' + state.data.stats.cancelledCount + ' 筆已取消的報名從主索引與各攤位名單裡刪掉。\n' +
+                 '目前有效的報名完全不受影響，但刪掉的取消紀錄沒辦法復原。',
+        confirmText: '清除',
+        danger: true
+      }).then(function (yes) {
+        if (!yes) return;
+        UI.busy(btn, true, '清除中…');
+
+        var total = { idx: 0, booth: 0 };
+        function step(boothIds) {
+          var payload = { adminCode: state.code };
+          if (boothIds) payload.boothIds = boothIds;
+          return API.adminPurgeCancelled(payload).then(function (res) {
+            total.idx += res.removedIndex || 0;
+            total.booth += res.removedBooth || 0;
+            if (res.pending && res.pending.length) return step(res.pending);
+            return res;
+          });
+        }
+
+        step(null)
+          .then(function () {
+            UI.busy(btn, false);
+            UI.ok('已清除 ' + total.idx + ' 筆取消紀錄');
+            load(app);
+          })
+          .catch(function (e) { UI.busy(btn, false); UI.err(e.message); });
+      });
     };
 
     document.getElementById('expBooths').onclick = function () {
