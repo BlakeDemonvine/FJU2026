@@ -491,25 +491,34 @@ tbody tr.sum-row b { font-size: 1.02em; }
 .slideshow {
   position: relative; border-radius: var(--radius); overflow: hidden;
   background: #241A13; border: 1px solid var(--border); box-shadow: var(--shadow-sm);
+  /* 照片很高的時候外框會被縮窄（見 ui.js 的 fitHeight），縮窄之後要置中 */
+  margin-inline: auto; transition: width .42s cubic-bezier(.4,0,.2,1);
   /* 直向留給頁面捲動，橫向交給我們自己處理，這樣滑照片不會連頁面一起動 */
   touch-action: pan-y;
 }
 /* 固定高度，不用 aspect-ratio：aspect-ratio 碰到 max-height 會連寬度一起縮，照片就不置中了 */
-.slide-view { position: relative; width: 100%; height: clamp(240px, 44vw, 460px); overflow: hidden; }
+/* 高度由 ui.js 依照「目前這張照片的比例」算出來寫成行內樣式，
+   照片才會剛好填滿、兩側不會有模糊黑邊；下面這個是還沒量到之前的暫定值。 */
+.slide-view {
+  position: relative; width: 100%; height: clamp(240px, 44vw, 460px); overflow: hidden;
+  transition: height .42s cubic-bezier(.4,0,.2,1);
+}
+.slideshow.no-anim .slide-view, .slideshow.no-anim { transition: none; }
 .slide-view.empty { display: grid; place-items: center; }
 /* 主視覺：兩張圖長寬差很多，用固定框＋模糊底圖，才不會每換一張整頁高度就跳一次 */
 /* 主視覺：高度由 JS 依「目前這張照片的長寬比」算出來，照片剛好填滿整個框，
    兩側與上下都不會留白。兩張比例不同時高度會平滑地過渡，不會硬跳。
    還沒量到尺寸之前先用 44vw 撐著，避免版面閃一下。 */
-.slideshow.is-banner .slide-view { height: 44vw; transition: height .42s cubic-bezier(.4,0,.2,1); }
-.slideshow.is-banner.no-anim .slide-view { transition: none; }
+.slideshow.is-banner .slide-view { height: 44vw; }
 .slideshow.is-banner .slide-img { object-fit: cover; }
 .slideshow.is-banner .slide-bg { display: none; }
 .slide-track {
   display: flex; width: 100%; height: 100%;
   will-change: transform; transform: translate3d(0,0,0);
 }
-.slide { position: relative; flex: 0 0 100%; width: 100%; height: 100%; }
+/* overflow 很重要：下一張的模糊底圖被放大了 1.18 倍，沒有裁掉的話
+   它會從右邊「溢」進目前這一張，在照片右側壓出一條暗帶。 */
+.slide { position: relative; flex: 0 0 100%; width: 100%; height: 100%; overflow: hidden; }
 .slide img {
   position: absolute; inset: 0; width: 100%; height: 100%; display: block;
   border: 0; border-radius: 0; box-shadow: none;
