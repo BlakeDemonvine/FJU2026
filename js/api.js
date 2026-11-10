@@ -51,7 +51,16 @@ window.API = (function () {
       }
       throw new Error('後端回傳格式錯誤');
     }
-    if (!data.ok) throw new Error(data.error || '操作失敗');
+    if (!data.ok) {
+      var err = data.error || '操作失敗';
+      /* 「不支援的操作」= 前端已經更新、但後端還是舊版。
+         這一題的解法永遠是重新部署，所以直接把步驟寫出來。 */
+      if (/不支援的操作/.test(err)) {
+        throw new Error('後端還是舊版，請到 Apps Script 重新貼上 Code.gs，' +
+          '然後「部署 → 管理部署作業 → 鉛筆 → 版本選『新增版本』→ 部署」。（' + err + '）');
+      }
+      throw new Error(err);
+    }
     return data;
   }
 
