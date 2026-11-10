@@ -299,29 +299,52 @@ window.UI = (function () {
         if (s) hydrateImg(s.querySelector('.slide-img'));
       }
 
-      /* 主視覺：外框高度 = 目前這張照片的高度（寬度已經是 100%），
-         所以照片剛好填滿，兩側不會有留白。照片還沒載完就先跳過，載完會再叫一次。 */
+      /* 外框高度 = 目前這張照片在這個寬度下的高度，照片就剛好填滿，
+         兩側不會留下模糊的黑邊。照片還沒載完就先跳過，載完會再叫一次。
+         直式照片會被擋在上限之內（太高的話整頁都被它占滿），
+         這種情況才會看到底下那層模糊背景。 */
+      function maxViewH() {
+        if (banner) return 1e6;                         // 主視覺本來就是橫幅，不用設限
+        var vh = window.innerHeight || 700;
+        return Math.max(240, Math.round(vh * 0.62));
+      }
+
       function fitHeight() {
-        if (!banner) return;
         var im = slides[idx] && slides[idx].querySelector('.slide-img');
         if (!im || !im.naturalWidth) return;
-        var w = view.clientWidth || box.clientWidth;
-        if (!w) return;
-        view.style.height = (w * im.naturalHeight / im.naturalWidth) + 'px';
+
+        box.style.width = '';                           // 先還原，量到的才是可用的最大寬度
+        var full = box.getBoundingClientRect().width;
+        var inner = view.clientWidth || full;
+        var frame = full - inner;                       // 外框的邊框寬度
+        if (!inner) return;
+
+        var ratio = im.naturalWidth / im.naturalHeight;
+        var h = inner / ratio;
+        var maxH = maxViewH();
+
+        /* 太高的照片（直式、或桌機上整個寬度會變成很高）就卡在上限，
+           同時把整個外框縮窄成同樣的比例 —— 這樣照片還是剛好填滿，
+           不會在兩側留下模糊的黑邊。外框會自己置中。 */
+        if (h > maxH) {
+          h = maxH;
+          box.style.width = Math.round(maxH * ratio + frame) + 'px';
+        }
+        view.style.height = Math.round(h) + 'px';
       }
-      if (banner) {
-        box.classList.add('no-anim');            // 第一次定高不要有動畫
-        $$('.slide-img', box).forEach(function (im) {
-          if (im.complete) fitHeight();
-          im.addEventListener('load', fitHeight);
-        });
-        window.addEventListener('resize', function () {
-          box.classList.add('no-anim');
-          fitHeight();
-          setTimeout(function () { box.classList.remove('no-anim'); }, 50);
-        });
-        setTimeout(function () { box.classList.remove('no-anim'); }, 80);
-      }
+
+      box.classList.add('no-anim');                     // 第一次定高不要有動畫
+      $$('.slide-img', box).forEach(function (im) {
+        if (im.complete) fitHeight();
+        im.addEventListener('load', fitHeight);
+      });
+      window.addEventListener('resize', function () {
+        if (!document.body.contains(box)) return;
+        box.classList.add('no-anim');
+        fitHeight();
+        setTimeout(function () { box.classList.remove('no-anim'); }, 50);
+      });
+      setTimeout(function () { box.classList.remove('no-anim'); }, 80);
 
       function apply(animate) {
         track.style.transition = animate ? 'transform .42s cubic-bezier(.4,0,.2,1)' : 'none';
