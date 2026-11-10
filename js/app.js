@@ -12,7 +12,8 @@ window.App = (function () {
      config.js 若有設 BANNERS 會以那邊為準。 */
   var HERO_BANNERS = [
     'assets/fju2026.jpg',
-    'assets/fju2026b.jpg'
+    'assets/fju2026b.jpg',
+    'assets/fju2026c.jpg'
   ];
 
   function setRefresh(fn, ms) {
