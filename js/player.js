@@ -108,6 +108,7 @@ window.PlayerView = (function () {
 
   function renderHome(app) {
     var mapSrc = (window.APP_CONFIG && window.APP_CONFIG.MAP) || 'assets/map.png';
+    var restoreRail = true;      // 從攤位頁回來時，要滑回原本那一攤
 
     API.track('home');          // 記一次「有人看了這個網站」
 
@@ -370,6 +371,21 @@ window.PlayerView = (function () {
 
       var rail = document.getElementById('boothRail');
       if (rail && keepScroll) rail.scrollLeft = keepScroll;
+
+      /* 從某一攤的頁面按返回回來時，把當時看的那一攤捲回畫面正中間，
+         不然每次都從第一攤重新開始。 */
+      if (rail && restoreRail && !keepScroll) {
+        restoreRail = false;
+        var backTo = UI.cacheGet('railAt', 60 * 60 * 1000);
+        if (backTo) {
+          var at = -1;
+          list.forEach(function (b, i) { if (String(b.boothId) === String(backTo)) at = i; });
+          var card = at >= 0 ? UI.$$('.booth-card', rail)[at] : null;
+          if (card) {
+            rail.scrollLeft = card.offsetLeft + card.offsetWidth / 2 - rail.clientWidth / 2;
+          }
+        }
+      }
       initRail(rail, island, list);
       markClipped();
     }
@@ -405,6 +421,7 @@ window.PlayerView = (function () {
         });
 
         var cur = list[best];
+        UI.cacheSet('railAt', cur.boothId);      // 記住現在看的是哪一攤
         island.hidden = false;
         island.parentNode.classList.add('has-island');
         island.innerHTML =
@@ -763,7 +780,8 @@ window.PlayerView = (function () {
         '<input type="text" id="suName" maxlength="20" placeholder="請填真實姓名，方便現場核對" value="' + esc(me.name || '') + '"></div>' +
       '<div class="field"><label for="suPhone">手機號碼</label>' +
         '<input type="tel" id="suPhone" inputmode="numeric" maxlength="13" placeholder="0912345678" value="' + esc(me.phone || '') + '">' +
-        '<p class="hint">取消報名時要用同一組姓名與手機號碼查詢，請填正確喔。</p></div>' +
+        '<p class="hint">同一支手機可以幫家裡好幾位分別報名，姓名各自填就好。<br>' +
+        '取消報名時要用同一組姓名與手機號碼查詢，請填正確喔。</p></div>' +
       '<div class="btn-row">' +
         '<button class="btn btn-ghost" data-cancel>再想想</button>' +
         '<button class="btn" data-ok>確認報名</button>' +
@@ -776,6 +794,49 @@ window.PlayerView = (function () {
 
         root.querySelector('[data-cancel]').onclick = close;
 
+        /* 同一支手機可以在同一個時段報好幾位（家長帶兩個小孩）。
+           後端遇到「同電話、不同名字」時會先回 needConfirm，
+           這裡就把視窗換成確認畫面，按了再送一次。 */
+        function askAgain(msg, name, phone) {
+          root.innerHTML =
+            '<h3>這支手機已經報過這個時段</h3>' +
+            '<p class="muted">' + UI.nl2br(msg) + '</p>' +
+            '<p class="muted small" style="margin-top:8px">' +
+              '同一位小朋友不會重複報到；如果是幫另一位報名，按下面繼續就好。</p>' +
+            '<div class="btn-row">' +
+              '<button class="btn btn-ghost" data-no>取消</button>' +
+              '<button class="btn" data-yes>再報一位</button>' +
+            '</div>';
+          root.querySelector('[data-no]').onclick = close;
+          root.querySelector('[data-yes]').onclick = function () {
+            UI.busy(this, true, '報名中…');
+            send(name, phone, true);
+          };
+        }
+
+        function send(name, phone, allowSamePhone) {
+          var btn = root.querySelector('[data-ok]') || root.querySelector('[data-yes]');
+          API.signup({
+            boothId: booth.boothId, slotId: slot.id,
+            name: name, phone: phone,
+            allowSamePhone: !!allowSamePhone
+          })
+            .then(function (res) {
+              if (res.needConfirm) return askAgain(res.message, name, phone);
+              UI.store('me', { name: name, phone: phone });
+              UI.bumpGrowth(1);
+              close();
+              UI.ok('報名成功！' + esc(booth.name) + ' ' + slot.label);
+              if (res.warning) setTimeout(function () { UI.toast(res.warning); }, 900);
+              if (onDone) onDone();
+            })
+            .catch(function (e) {
+              if (btn) UI.busy(btn, false);
+              UI.err(e.message);
+              if (/已滿|停止/.test(e.message) && onDone) { close(); onDone(); }
+            });
+        }
+
         function submit() {
           var btn = root.querySelector('[data-ok]');
           var name = nameEl.value.trim();
@@ -785,20 +846,7 @@ window.PlayerView = (function () {
           if (!/^09\d{8}$/.test(phone)) return UI.err('手機號碼格式不對（09 開頭共 10 碼）');
 
           UI.busy(btn, true, '報名中…');
-          API.signup({ boothId: booth.boothId, slotId: slot.id, name: name, phone: phone })
-            .then(function (res) {
-              UI.store('me', { name: name, phone: phone });
-              UI.bumpGrowth(1);
-              close();
-              UI.ok('報名成功！' + esc(booth.name) + ' ' + slot.label);
-              if (res.warning) setTimeout(function () { UI.toast(res.warning); }, 900);
-              if (onDone) onDone();
-            })
-            .catch(function (e) {
-              UI.busy(btn, false);
-              UI.err(e.message);
-              if (/已滿|停止/.test(e.message) && onDone) { close(); onDone(); }
-            });
+          send(name, phone, false);
         }
 
         root.querySelector('[data-ok]').onclick = submit;
